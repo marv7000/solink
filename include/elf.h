@@ -1,7 +1,18 @@
 #pragma once
 #include <stdint.h>
+#include <stdbool.h>
 
-struct elf_section_header
+typedef enum
+{
+    ELF_OK,
+    ELF_NONE,
+    ELF_INVALID_MAGIC,
+    ELF_INVALID_IDENT_CLASS,
+    ELF_INVALID_IDENT_DATA,
+    ELF_INVALID_VERSION
+} elf_error;
+
+typedef struct
 {
     uint32_t sh_name;
     uint32_t sh_type;
@@ -13,9 +24,9 @@ struct elf_section_header
     uint32_t sh_info;
     uint64_t sh_addralign;
     uint64_t sh_entsize;
-};
+} elf_section_header;
 
-struct elf_program_header
+typedef struct
 {
     uint32_t p_type;
     uint32_t p_flags;
@@ -25,9 +36,9 @@ struct elf_program_header
     uint64_t p_filesz;
     uint64_t p_memsz;
     uint64_t p_align;
-};
+} elf_program_header;
 
-struct elf_header
+typedef struct
 {
     uint32_t e_ident_magic;
     uint8_t e_ident_class;
@@ -48,18 +59,37 @@ struct elf_header
     uint16_t e_shentsize;
     uint16_t e_shnum;
     uint16_t e_shstrndx;
-};
+} elf_header;
 
-struct elf_file
+typedef struct
 {
-    struct elf_header header;
-    struct elf_program_header* program_headers;
-    struct elf_section_header* section_headers;
-    char** section_names;
-    uint8_t** section_bodies;
-};
+    elf_header hdr;
+    elf_program_header* ph;
+    elf_section_header* sh;
+    char** sn;
+    uint8_t** sb;
+} elf_file;
 
-/// \brief  Opens an ELF file and parses its contents.
-/// \param  result  The deserialized ELF.
-/// \param  path    The file path to the ELF. 
-void elf_read(struct elf_file* result, const char* path);
+/// \brief              Performs a sanity check on the given ELF.
+/// \param  [in] elf    The file to check.
+/// \returns            ELF_OK if successful, any other value indicates failure.
+elf_error elf_check(const elf_file* elf);
+
+/// \brief                  Opens an ELF file and parses its contents.
+/// \param  [in]    path    The file path to the ELF.
+/// \param  [out]   elf     The deserialized ELF.
+/// \returns                ELF_OK if successful, any other value indicates failure.
+elf_error elf_read(const char* path, elf_file* elf);
+
+/// \brief                  Writes an ELF struct to file.
+/// \param  [in]    path    The file path to save to.
+/// \param  [in]    elf     The deserialized ELF.
+/// \returns                ELF_OK if successful, any other value indicates failure.
+elf_error elf_write(const char* path, const elf_file* elf);
+
+/// \brief                  Finds a section by name and gets its index.
+/// \param  [in]    name    The name of the section.
+/// \param  [in]    elf     The deserialized ELF.
+/// \param  [out]   idx     The index of the section, if function returned `ELF_OK`.
+/// \return                 `true` if successful, otherwise `false`.
+bool elf_find_section(const char* name, const elf_file* elf, uint16_t* idx);

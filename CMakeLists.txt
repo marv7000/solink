@@ -4,7 +4,7 @@ set(CMAKE_C_STANDARD 11)
 
 set(SOLINK_VER_MAJ 0)
 set(SOLINK_VER_MIN 1)
-string(TIMESTAMP SOLINK_VER_PATCH "%Y/%m/%d, %H:%m")
+string(TIMESTAMP SOLINK_VER_PATCH "%Y/%m/%d, %H:%M:%S")
 
 add_executable(solink
     src/main.c

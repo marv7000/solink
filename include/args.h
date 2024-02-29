@@ -4,11 +4,16 @@
 
 typedef struct
 {
+    const char* input;
+    uint32_t num_libraries;
+    const char** libraries;
+    
     const char* output;
     uint32_t num_symbols;
     const char** symbols;
     bool force;
-    bool verbose;
+    bool quiet;
+    bool version;
     bool help;
 } arguments;
 

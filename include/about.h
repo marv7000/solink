@@ -5,5 +5,6 @@
     "\t-o, --output <file path> Save the resulting binary at the given location.\n" \
     "\t-s, --symbol <symbol>    Only match the given symbol.\n" \
     "\t-f, --force              Forcefully match all external symbols.\n" \
-    "\t-v, --verbose            Display more detailed messages to the standard output.\n" \
+    "\t-q, --quiet              Don't write any messages to the standard output.\n" \
+    "\t-v, --version            Write the version to standard output.\n" \
     "\t--help                   Display this message with all flags and their usage.\n"

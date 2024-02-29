@@ -13,8 +13,11 @@ Forcefully match all external symbols.
 Instead of a warning, the program will exit with a non-zero exit code if one
 symbol failed to match.
 
-### `-v` `--verbose`
-Display more detailed messages to the standard output.
+### `-q` `--quiet`
+Don't write any messages to the standard output.
+
+### `-v` `--version`
+Write the version to standard output.
 
 ### `--help`
 Display this message with all flags and their usage. 

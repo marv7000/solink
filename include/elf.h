@@ -14,6 +14,16 @@ typedef enum
 
 typedef struct
 {
+    uint32_t sym_name;
+    uint8_t sym_info;
+    uint8_t sym_other;
+    uint16_t sym_shndx;
+    uint64_t sym_value;
+    uint64_t sym_size;
+} __attribute__((packed)) elf_symtab;
+
+typedef struct
+{
     uint32_t sh_name;
     uint32_t sh_type;
     uint64_t sh_flags;

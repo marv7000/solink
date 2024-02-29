@@ -1,5 +1,5 @@
 # solink
-A linker for static object files and executables
+A linker for shared object files
 
 ### About
 `solink` reads ELF exectuables and attempts to satisfy external references by

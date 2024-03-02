@@ -438,20 +438,18 @@ elf_error elf_add_section(elf_file* elf, const elf_new_section* section)
     if (!elf || !section)
         return ELF_NONE;
 
+    elf->new_data_size++;
     if (!elf->new_data)
         elf->new_data = (elf_new_section*)malloc(sizeof(elf_new_section));
     else
     {
         elf_new_section* new_mem = (elf_new_section*)malloc(elf->new_data_size * sizeof(elf_new_section));
-        memcpy(new_mem, elf->new_data, elf->new_data_size);
+        memcpy(new_mem, elf->new_data, elf->new_data_size * sizeof(elf_new_section));
         free(elf->new_data);
         elf->new_data = new_mem;
     }
-    elf->new_data_size++;
 
-    char* name = malloc(strlen(section->name) + 1);
-    strcpy(name, section->name);
-    elf->new_data[elf->new_data_size - 1].name = name;
+    elf->new_data[elf->new_data_size - 1].name = section->name;
 
     elf->new_data[elf->new_data_size - 1].data = section->data;
     elf->new_data[elf->new_data_size - 1].size = section->size;

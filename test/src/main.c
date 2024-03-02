@@ -2,5 +2,6 @@
 
 int main(const int argc, const char** argv)
 {
-    return test_lib_add(1, 2);
+    int i = test_lib_mul(2, 2);
+    return test_lib_add(i, 2);
 }

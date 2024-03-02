@@ -72,6 +72,9 @@ elf_error elf_read(const char* path, elf_file* elf)
     elf_error err;
     FILE* f = fopen(path, "r");
 
+    // Clear the struct.
+    memset(elf, 0, sizeof(elf_file));
+
     // Read header.
     fread(&elf->header.e_ident_magic, sizeof(uint32_t), 1, f);
     fread(&elf->header.e_ident_class, sizeof(uint8_t), 1, f);
@@ -181,6 +184,13 @@ elf_error elf_read(const char* path, elf_file* elf)
         fread(elf->section_data[i], sizeof(uint8_t), section_size, f);
     }
 
+    // Read only the body, not the header.
+    fseek(f, 0, SEEK_END);
+    elf->size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    elf->data = (uint8_t*)malloc(elf->size);
+    fread(elf->data, sizeof(uint8_t), elf->size, f);
+
     // Clean up.
     fclose(f);
     return ELF_OK;
@@ -196,6 +206,10 @@ elf_error elf_write(const char* path, const elf_file* elf)
         return err;
     
     FILE* f = fopen(path, "w");
+
+    // Write the body, then seek over it again, so it can be overwritten.
+    fwrite(elf->data, sizeof(uint8_t), elf->size, f);
+    fseek(f, 0, SEEK_SET);
 
     // Write header.
     fwrite(&elf->header.e_ident_magic, sizeof(uint32_t), 1, f);
@@ -229,8 +243,126 @@ elf_error elf_write(const char* path, const elf_file* elf)
     fwrite(&elf->header.e_phentsize, sizeof(uint16_t), 1, f);
     fwrite(&elf->header.e_phnum, sizeof(uint16_t), 1, f);
     fwrite(&elf->header.e_shentsize, sizeof(uint16_t), 1, f);
-    fwrite(&elf->header.e_shnum, sizeof(uint16_t), 1, f);
+
+    uint16_t sh_fix = elf->header.e_shnum + elf->new_data_size;
+    fwrite(&sh_fix, sizeof(uint16_t), 1, f);
     fwrite(&elf->header.e_shstrndx, sizeof(uint16_t), 1, f);
+
+    fseek(f, (long)elf->header.e_phoff, SEEK_SET);
+    for (uint16_t i = 0; i < elf->header.e_phnum; i++)
+    {
+        fwrite(&elf->program_header[i].p_type, sizeof(uint32_t), 1, f);
+        if (elf->header.e_ident_class == 1)
+        {
+            fwrite(&elf->program_header[i].p_offset, sizeof(uint32_t), 1, f);
+            fwrite(&elf->program_header[i].p_vaddr, sizeof(uint32_t), 1, f);
+            fwrite(&elf->program_header[i].p_paddr, sizeof(uint32_t), 1, f);
+            fwrite(&elf->program_header[i].p_filesz, sizeof(uint32_t), 1, f);
+            fwrite(&elf->program_header[i].p_memsz, sizeof(uint32_t), 1, f);
+            fwrite(&elf->program_header[i].p_flags, sizeof(uint32_t), 1, f);
+            fwrite(&elf->program_header[i].p_align, sizeof(uint32_t), 1, f);
+        }
+        else
+        {
+            fwrite(&elf->program_header[i].p_flags, sizeof(uint32_t), 1, f);
+            fwrite(&elf->program_header[i].p_offset, sizeof(uint64_t), 1, f);
+            fwrite(&elf->program_header[i].p_vaddr, sizeof(uint64_t), 1, f);
+            fwrite(&elf->program_header[i].p_paddr, sizeof(uint64_t), 1, f);
+            fwrite(&elf->program_header[i].p_filesz, sizeof(uint64_t), 1, f);
+            fwrite(&elf->program_header[i].p_memsz, sizeof(uint64_t), 1, f);
+            fwrite(&elf->program_header[i].p_align, sizeof(uint64_t), 1, f);
+        }
+    }
+
+    fseek(f, (long)elf->header.e_shoff, SEEK_SET);
+    for (uint16_t i = 0; i < elf->header.e_shnum; i++)
+    {
+        fwrite(&elf->section_header[i].sh_name, sizeof(uint32_t), 1, f);
+        fwrite(&elf->section_header[i].sh_type, sizeof(uint32_t), 1, f);
+        if (elf->header.e_ident_class == 1)
+        {
+            fwrite(&elf->section_header[i].sh_flags, sizeof(uint32_t), 1, f);
+            fwrite(&elf->section_header[i].sh_addr, sizeof(uint32_t), 1, f);
+            fwrite(&elf->section_header[i].sh_offset, sizeof(uint32_t), 1, f);
+            fwrite(&elf->section_header[i].sh_size, sizeof(uint32_t), 1, f);
+            fwrite(&elf->section_header[i].sh_link, sizeof(uint32_t), 1, f);
+            fwrite(&elf->section_header[i].sh_info, sizeof(uint32_t), 1, f);
+            fwrite(&elf->section_header[i].sh_addralign, sizeof(uint32_t), 1, f);
+            fwrite(&elf->section_header[i].sh_entsize, sizeof(uint32_t), 1, f);
+        }
+        else
+        {
+            fwrite(&elf->section_header[i].sh_flags, sizeof(uint64_t), 1, f);
+            fwrite(&elf->section_header[i].sh_addr, sizeof(uint64_t), 1, f);
+            fwrite(&elf->section_header[i].sh_offset, sizeof(uint64_t), 1, f);
+            fwrite(&elf->section_header[i].sh_size, sizeof(uint64_t), 1, f);
+            fwrite(&elf->section_header[i].sh_link, sizeof(uint32_t), 1, f);
+            fwrite(&elf->section_header[i].sh_info, sizeof(uint32_t), 1, f);
+            fwrite(&elf->section_header[i].sh_addralign, sizeof(uint64_t), 1, f);
+            fwrite(&elf->section_header[i].sh_entsize, sizeof(uint64_t), 1, f);
+        }
+    }
+
+    // Total size of new bytes written in the section header.
+    const uint64_t section_header_size = elf->header.e_ident_class == 1 ? 0x28 : 0x40;
+    const uint64_t new_header_size = section_header_size * elf->new_data_size;
+    const uint64_t new_data_offset = ftello(f) + new_header_size;
+    uint64_t total_body_size = 0;
+    for (uint64_t i = 0; i < elf->new_data_size; i++)
+        total_body_size += elf->new_data[i].size;
+
+    // Write newly added sections.
+    for (uint64_t i = 0; i < elf->new_data_size; i++)
+    {
+        // Calculate name offset.
+        uint64_t base = elf->section_header[elf->header.e_shstrndx].sh_offset;
+        uint64_t actual = ftello(f) + new_header_size + total_body_size - base;
+        fwrite(&actual, sizeof(uint32_t), 1, f);
+
+        uint32_t type = 1;
+        fwrite(&type, sizeof(uint32_t), 1, f);
+
+        uint64_t flags = 6;
+        uint64_t actual_offset = new_data_offset + section_header_size * i;
+        uint64_t addr = 0x400000 | actual_offset;
+        uint64_t link = 0;
+        uint64_t info = 0;
+        uint64_t align = 16;
+        uint64_t ent_size = 0;
+
+        if (elf->header.e_ident_class == 1)
+        {
+            fwrite(&flags, sizeof(uint32_t), 1, f);
+            fwrite(&elf->section_header[i].sh_addr, sizeof(uint32_t), 1, f);
+            fwrite(&actual_offset, sizeof(uint32_t), 1, f);
+            fwrite(&elf->new_data[i].size, sizeof(uint32_t), 1, f);
+            fwrite(&link, sizeof(uint32_t), 1, f);
+            fwrite(&info, sizeof(uint32_t), 1, f);
+            fwrite(&align, sizeof(uint32_t), 1, f);
+            fwrite(&ent_size, sizeof(uint32_t), 1, f);
+        }
+        else
+        {
+            fwrite(&flags, sizeof(uint64_t), 1, f);
+            fwrite(&elf->section_header[i].sh_addr, sizeof(uint64_t), 1, f);
+            fwrite(&actual_offset, sizeof(uint64_t), 1, f);
+            fwrite(&elf->new_data[i].size, sizeof(uint64_t), 1, f);
+            fwrite(&link, sizeof(uint32_t), 1, f);
+            fwrite(&info, sizeof(uint32_t), 1, f);
+            fwrite(&align, sizeof(uint64_t), 1, f);
+            fwrite(&ent_size, sizeof(uint64_t), 1, f);
+        }
+    }
+    // Write the bodies.
+    for (uint64_t i = 0; i < elf->new_data_size; i++)
+    {
+        fwrite(elf->new_data[i].data, sizeof(char), elf->new_data[i].size, f);
+    }
+    // Write the string table.
+    for (uint64_t i = 0; i < elf->new_data_size; i++)
+    {
+        fwrite(elf->new_data[i].name, sizeof(char), strlen(elf->new_data[i].name) + 1, f);
+    }
 
     // Clean up.
     fclose(f);
@@ -273,7 +405,7 @@ char* elf_error_str(elf_error err)
     switch (err)
     {
         case ELF_NONE:
-            return "No file given. (ELF_NONE)";
+            return "No data given. (ELF_NONE)";
         case ELF_UNSUPPORTED_ARCH:
             return "Unsupported machine architecture. (ELF_UNSUPPORTED_ARCH)";
         case ELF_INVALID_MAGIC:
@@ -287,4 +419,30 @@ char* elf_error_str(elf_error err)
         default:
             return NULL;
     }
+}
+
+elf_error elf_add_section(elf_file* elf, const elf_new_section* section)
+{
+    if (!elf || !section)
+        return ELF_NONE;
+
+    if (!elf->new_data)
+        elf->new_data = (elf_new_section*)malloc(sizeof(elf_new_section));
+    else
+    {
+        elf_new_section* new_mem = (elf_new_section*)malloc(elf->new_data_size * sizeof(elf_new_section));
+        memcpy(new_mem, elf->new_data, elf->new_data_size);
+        free(elf->new_data);
+        elf->new_data = new_mem;
+    }
+    elf->new_data_size++;
+
+    char* name = malloc(strlen(section->name) + 1);
+    strcpy(name, section->name);
+    elf->new_data[elf->new_data_size - 1].name = name;
+
+    elf->new_data[elf->new_data_size - 1].data = section->data;
+    elf->new_data[elf->new_data_size - 1].size = section->size;
+
+    return ELF_OK;
 }

@@ -74,6 +74,13 @@ typedef struct
 
 typedef struct
 {
+    char* name;
+    uint8_t* data;
+    size_t size;
+} elf_new_section;
+
+typedef struct
+{
     /// ELF Header
     elf_header header;
     /// Program Header
@@ -82,7 +89,16 @@ typedef struct
     elf_section_header* section_header;
     /// Section Data
     uint8_t** section_data;
+    /// Whole file if read from somewhere.
+    uint8_t* data;
+    /// Whole file size.
+    size_t size;
+    /// Manually inserted data.
+    elf_new_section* new_data;
+    /// Amount of new data.
+    size_t new_data_size;
 } elf_file;
+
 
 /// \brief              Creates and initializes a new ELF.
 /// \param  [in] elf    The file to create.
@@ -129,3 +145,9 @@ bool elf_find_section(const char* name, const elf_file* elf, uint16_t* idx);
 /// \param  [out]   name    A reference to a pointer for writing the string address.
 /// \returns                `true` if successful, otherwise `false`.
 bool elf_get_section_name(const elf_file* elf, uint16_t idx, char** name);
+
+/// \brief                  Adds a new section to the ELF.
+/// \param  [ref]   elf     The file to add a new section to.
+/// \param  [in]    section The section data.
+/// \returns                ELF_OK if successful, any other value indicates failure.
+elf_error elf_add_section(elf_file* elf, const elf_new_section* section);

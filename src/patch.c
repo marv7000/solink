@@ -17,7 +17,7 @@ bool patch_get_dynsym(const elf_file* elf, uint16_t* dynsym, uint16_t* dynstr)
 bool patch_get_symbols(const elf_file* elf, char*** str, uint64_t* num)
 {
     if (!elf || !str || !num)
-        exit(1);
+        return false;
 
     // Get the dynamic symbol table.
     uint16_t lib_sym, lib_str;
@@ -28,19 +28,46 @@ bool patch_get_symbols(const elf_file* elf, char*** str, uint64_t* num)
 
     // Write all entries to the buffer.
     *str = (char**)malloc(num_sym * sizeof(char*));
-    uint64_t written = 0;
-    for (uint64_t i = 1; i < num_sym; i++)
+    for (uint64_t i = 0; i < num_sym; i++)
     {
         elf_symtab* sym = ((elf_symtab*)elf->section_data[lib_sym]) + i;
         // Only match symbols with info == STB_GLOBAL | STB_FUNC
         if (sym->sym_info == 0x12)
         {
-            (*str)[written] = (char*)(elf->section_data[lib_str] + sym->sym_name);
-            written++;
+            (*str)[i] = (char*)(elf->section_data[lib_str] + sym->sym_name);
+        }
+        else
+        {
+            (*str)[i] = NULL;
         }
     }
-    *num = written;
+    *num = num_sym;
     return true;
+}
+
+bool patch_find_symbol(const elf_file* elf, const char* name, elf_symtab** sym)
+{
+    if (!elf || !name || !sym)
+        return false;
+
+    uint16_t lib_sym, lib_str;
+    if (!patch_get_dynsym(elf, &lib_sym, &lib_str))
+        return false;
+
+    char** sym_names;
+    uint64_t num_names;
+    patch_get_symbols(elf, &sym_names, &num_names);
+    for (uint64_t i = 0; i < num_names; i++)
+    {
+        if (!sym_names[i])
+            continue;
+        if (!strcmp(sym_names[i], name))
+        {
+            *sym = ((elf_symtab*)elf->section_data[lib_sym]) + i;
+            return true;
+        }
+    }
+    return false;
 }
 
 bool patch_match_symbols(const elf_file* target, const elf_file* libs, uint64_t num_lib, char*** str, uint64_t* num_str)
@@ -72,6 +99,8 @@ bool patch_match_symbols(const elf_file* target, const elf_file* libs, uint64_t 
             // For each library symbol.
             for (uint64_t sym = 0; sym < sym_num_names[lib]; sym++)
             {
+                if (!sym_names[lib][sym] || !target_sym_names[exe])
+                    continue;
                 if (!strcmp(sym_names[lib][sym], target_sym_names[exe]))
                 {
                     (*str)[idx] = target_sym_names[exe];
@@ -102,7 +131,28 @@ bool patch_link_symbol(elf_file* target, const elf_file* library, const char* na
     if (!target || !library || !name)
         return false;
 
-    // TODO
+    // Get bytes from library function.
+    elf_symtab* sym;
+    if (!patch_find_symbol(library, name, &sym))
+        return false;
+    uint8_t* fn_bytes = (uint8_t*)malloc(sym->sym_size);
+    memcpy(fn_bytes, library->data + sym->sym_value, sym->sym_size);
+
+    // TODO: Place the function in a new section with its byte code.
+    char* name_buf = malloc(512);
+    snprintf(name_buf, 512, ".link_%s", name);
+    elf_new_section new_section = {0};
+    new_section.name = name_buf;
+    new_section.data = fn_bytes;
+    new_section.size = sym->sym_size;
+
+    if (elf_add_section(target, &new_section) != ELF_OK)
+    {
+        return false;
+    }
+    target->section_data[target->header.e_shnum - 1] = fn_bytes;
+
+    // TODO: Perform necessary offset fixes to the target.
 
     return true;
 }

@@ -41,17 +41,16 @@ int32_t main(const int32_t argc, const char** argv)
     }
 
     // Create the output ELF.
-    elf_file target;
-    elf_new(&target);
+    elf_file* target = libs + last;
 
     // Patch input executable with all libraries.
     for (uint16_t i = 0; i < last; i++)
     {
-        patch_link_library(libs + last, libs + i);
+        patch_link_library(target, libs + i);
     }
 
     // Write the result to file.
-    elf_error written = elf_write(args.output, &target);
+    elf_error written = elf_write(args.output, target);
     if (written != ELF_OK)
     {
         fprintf(stderr, "Error: Failed to write the ELF to \"%s\"!\n", args.output);

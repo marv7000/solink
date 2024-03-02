@@ -22,7 +22,14 @@ bool patch_get_symbols(const elf_file* elf, char*** str, uint64_t* num);
 /// \brief  [in]    idx     The index of the symbol in the symbol table.
 /// \brief  [ref]   sym     Address to write the result to.
 /// \returns                `true` if successful, otherwise `false`.
-bool patch_get_symbol(const elf_file* elf, uint64_t idx, elf_symtab* sym);
+bool patch_get_symbol(const elf_file* elf, uint64_t idx, elf_symtab** sym);
+
+/// \brief                  Gets a pointer to the specified symbol.
+/// \brief  [in]    elf     The file to extract from.
+/// \brief  [in]    name    The name of the symbol in the symbol table.
+/// \brief  [ref]   sym     Address to write the result to.
+/// \returns                `true` if successful, otherwise `false`.
+bool patch_find_symbol(const elf_file* elf, const char* name, elf_symtab** sym);
 
 /// \brief                  Matches all library names against the ones from the target.
 /// \brief  [in]    target  The file to match against.

@@ -23,7 +23,7 @@ If no arguments are provided, `solink` will output a help text (equivalent to
 `solink --help`).
 
 Example:
-```sh
+```section_header
 solink -o my_patched_app libs/my_lib1.so libs/my_lib2.so my_app
 ```
 
@@ -31,7 +31,7 @@ solink -o my_patched_app libs/my_lib1.so libs/my_lib2.so my_app
 For a list of flags and options, see the [documentation](docs/flags.md).
 
 ### Building
-```sh
+```section_header
 mkdir build
 cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release

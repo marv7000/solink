@@ -4,10 +4,9 @@
 
 typedef struct
 {
-    const char* input;
-    uint32_t num_libraries;
-    const char** libraries;
-    
+    uint16_t num_files;
+    const char** files;
+
     const char* output;
     uint32_t num_symbols;
     const char** symbols;

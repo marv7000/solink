@@ -1,7 +1,7 @@
 #include <stdint.h>
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <args.h>
 #include <elf.h>
@@ -13,40 +13,66 @@ int32_t main(const int32_t argc, const char** argv)
     arguments args = {0};
     args_parse(&args, argc, argv);
 
-    // Open the input ELF.
-    elf_file elf_input;
-    if (elf_read(args.input, &elf_input) != ELF_OK)
-        return 1;
-
-    // Get dynamic symbol table.
-    uint16_t dynsym;
-    uint16_t dynstr;
-    if (!elf_find_section(".dynsym", &elf_input, &dynsym) || !elf_find_section(".dynstr", &elf_input, &dynstr))
+    // Open all libraries.
+    elf_file* libs = alloca(args.num_files * sizeof(elf_file));
+    for (uint16_t i = 0; i < args.num_files; i++)
     {
-        fprintf(stderr, "Error: Couldn't find dynamic symbol table!\n");
-        return 1;
-    }
-
-    // Print all dynamic symbol names.
-    if (!args.quiet)
-    {
-        printf("Dynamic symbols required by \"%s\":\n", args.input);
-        uint64_t num_entries = elf_input.sh[dynsym].sh_size / elf_input.sh[dynsym].sh_entsize;
-        for (uint64_t i = 1; i < num_entries; i++)
+        elf_error read = elf_read(args.files[i], libs + i);
+        if (read != ELF_OK)
         {
-            elf_symtab* sym = ((elf_symtab*)elf_input.sb[dynsym]) + i;
-            printf("%s\n", elf_input.sb[dynstr] + sym->sym_name);
+            fprintf(stderr, "Error: Failed to read the ELF \"%s\" from file!\n", args.files[i]);
+            fprintf(stderr, "       %s\n", elf_error_str(read));
+            return 1;
         }
     }
 
-    // TODO: Get library exports.
+    // Print library symbols.
+    if (!args.quiet)
+    {
+        char*** names = (char***)malloc(args.num_files * sizeof(char**));
+        uint64_t* num_names = (uint64_t*)malloc(args.num_files * sizeof(uint64_t));
+        for (uint64_t i = 0; i < args.num_files; i++)
+        {
+            printf("Dynamic symbols provided by \"%s\":\n", args.files[i]);
+            patch_get_symbols(libs + i, names + i, num_names + i);
+            for (uint64_t sym = 0; sym < num_names[i]; sym++)
+                printf("\t%s\n", names[i][sym]);
+        }
+        printf("Matching symbols:\n");
+        // For every executable symbol.
+        for (uint64_t exe = 0; exe < num_names[args.num_files - 1]; exe++)
+        {
+            // For each library.
+            for (uint64_t lib = 0; lib < args.num_files - 1; lib++)
+            {
+                // For each library symbol.
+                for (uint64_t sym = 0; sym < num_names[lib]; sym++)
+                {
+                    if (!strcmp(names[lib][sym], names[args.num_files - 1][exe]))
+                        printf("\t%s\n", names[lib][sym]);
+                }
+            }
+        }
+        free(names);
+        free(num_names);
+    }
 
-    // TODO: Patch input executable.
+    // Create the output ELF.
+    elf_file target;
+    elf_new(&target);
+
+    // Patch input executable with all libraries.
+    for (uint16_t i = 0; i < args.num_files - 1; i++)
+    {
+        patch_link_library(libs + args.num_files - 1, libs + i);
+    }
 
     // Write the result to file.
-    if (elf_write(args.output, &elf_input) != ELF_OK)
+    elf_error written = elf_write(args.output, &target);
+    if (written != ELF_OK)
     {
-        fprintf(stderr, "Error: Failed to write the ELF to file!\n");
+        fprintf(stderr, "Error: Failed to write the ELF to \"%s\"!\n", args.output);
+        fprintf(stderr, "       %s\n", elf_error_str(written));
         return 1;
     }
 

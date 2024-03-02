@@ -16,6 +16,7 @@ add_executable(solink
 target_compile_definitions(solink PRIVATE SOLINK_VER_MAJ="${SOLINK_VER_MAJ}")
 target_compile_definitions(solink PRIVATE SOLINK_VER_MIN="${SOLINK_VER_MIN}")
 target_compile_definitions(solink PRIVATE SOLINK_VER_PATCH="${SOLINK_VER_PATCH}")
+target_compile_definitions(solink PRIVATE SOLINK_ARCH_${CMAKE_HOST_SYSTEM_PROCESSOR})
 
 target_include_directories(solink PRIVATE include/)
 install(TARGETS solink)

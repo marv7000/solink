@@ -15,6 +15,10 @@ void args_parse(arguments* args, int32_t argc, const char** argv)
         exit(0);
     }
 
+    // Initialize library array. Size isn't exact here, but close to the amount we need.
+    if (!args->files)
+        args->files = calloc(sizeof(char*), argc - 2);
+
     // Parse all arguments, but exclude first (self).
     for (int32_t i = 1; i < argc; i++)
     {
@@ -65,19 +69,15 @@ void args_parse(arguments* args, int32_t argc, const char** argv)
         }
         else
         {
-            // Initialize array. Size isn't exact here, but close to the amount we need.
-            if (!args->libraries)
-                args->libraries = calloc(sizeof(char*), argc - 2);
-            
-            // Check if the library file exists.
-            if (!args_check_file(argv[argc - 1]))
+            // Check if the file exists.
+            if (!args_check_file(argv[i]))
             {
-                fprintf(stderr, "Error: \"%s\": %s\n", argv[argc - 1], strerror(errno));
+                fprintf(stderr, "Error: \"%s\": %s\n", argv[i], strerror(errno));
                 exit(1);
             }
 
-            args->libraries[args->num_libraries] = argv[i];
-            args->num_libraries++;
+            args->files[args->num_files] = argv[i];
+            args->num_files++;
         }
     }
 
@@ -95,19 +95,10 @@ void args_parse(arguments* args, int32_t argc, const char** argv)
         exit(0);
     }
 
-    // Check if the input file exists.
-    if (!args_check_file(argv[argc - 1]))
+    // We need at least 1 library and 1 executable.
+    if (args->num_files < 2)
     {
-        fprintf(stderr, "Error: \"%s\": %s\n", argv[argc - 1], strerror(errno));
-        exit(1);
-    }
-
-    args->input = argv[argc - 1];
-
-    // We need at least 1 library.
-    if (args->num_libraries == 0)
-    {
-        fprintf(stderr, "Error: Need at least 1 library to link against!\n");
+        fprintf(stderr, "Error: Need at least 1 library and exactly 1 executable to link!\n");
         exit(1);
     }
 }

@@ -6,6 +6,7 @@ typedef enum
 {
     ELF_OK,
     ELF_NONE,
+    ELF_UNSUPPORTED_ARCH,
     ELF_INVALID_MAGIC,
     ELF_INVALID_IDENT_CLASS,
     ELF_INVALID_IDENT_DATA,
@@ -73,17 +74,35 @@ typedef struct
 
 typedef struct
 {
-    elf_header hdr;
-    elf_program_header* ph;
-    elf_section_header* sh;
-    char** sn;
-    uint8_t** sb;
+    /// ELF Header
+    elf_header header;
+    /// Program Header
+    elf_program_header* program_header;
+    /// Section Header
+    elf_section_header* section_header;
+    /// Section Data
+    uint8_t** section_data;
 } elf_file;
+
+/// \brief              Creates and initializes a new ELF.
+/// \param  [in] elf    The file to create.
+/// \return             ELF_OK if successful, any other value indicates failure.
+elf_error elf_new(elf_file* elf);
+
+/// \brief              Frees all resources associated with the given ELF.
+/// \param  [in] elf    The file to free.
+/// \return             ELF_OK if successful, any other value indicates failure.
+elf_error elf_free(elf_file* elf);
 
 /// \brief              Performs a sanity check on the given ELF.
 /// \param  [in] elf    The file to check.
 /// \returns            ELF_OK if successful, any other value indicates failure.
 elf_error elf_check(const elf_file* elf);
+
+/// \brief              Returns a string representation of an ELF error.
+/// \param  [in] err    The error to get.
+/// \returns            A string to the description of the given error, or NULL if ELF_OK.
+char* elf_error_str(elf_error err);
 
 /// \brief                  Opens an ELF file and parses its contents.
 /// \param  [in]    path    The file path to the ELF.
@@ -101,5 +120,12 @@ elf_error elf_write(const char* path, const elf_file* elf);
 /// \param  [in]    name    The name of the section.
 /// \param  [in]    elf     The deserialized ELF.
 /// \param  [out]   idx     The index of the section, if function returned `ELF_OK`.
-/// \return                 `true` if successful, otherwise `false`.
+/// \returns                `true` if successful, otherwise `false`.
 bool elf_find_section(const char* name, const elf_file* elf, uint16_t* idx);
+
+/// \brief                  Gets the name of a section at the given index.
+/// \param  [in]    elf     The file where the section is stored.
+/// \param  [in]    idx     The index of the section to get the name of.
+/// \param  [out]   name    A reference to a pointer for writing the string address.
+/// \returns                `true` if successful, otherwise `false`.
+bool elf_get_section_name(const elf_file* elf, uint16_t idx, char** name);

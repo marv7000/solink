@@ -306,7 +306,11 @@ elf_error elf_write(const char* path, const elf_file* elf)
     // Total size of new bytes written in the section header.
     const uint64_t section_header_size = elf->header.e_ident_class == 1 ? 0x28 : 0x40;
     const uint64_t new_header_size = section_header_size * elf->new_data_size;
-    const uint64_t new_data_offset = ftello(f) + new_header_size;
+    const uint64_t pos = ftello(f);
+    const uint64_t align = 32;
+    uint64_t new_data_offset = pos + new_header_size;
+    if (new_data_offset % align != 0)
+        new_data_offset += align - pos % align;
     uint64_t total_body_size = 0;
     for (uint64_t i = 0; i < elf->new_data_size; i++)
         total_body_size += elf->new_data[i].size;
@@ -316,24 +320,25 @@ elf_error elf_write(const char* path, const elf_file* elf)
     {
         // Calculate name offset.
         uint64_t base = elf->section_header[elf->header.e_shstrndx].sh_offset;
-        uint64_t actual = ftello(f) + new_header_size + total_body_size - base;
-        fwrite(&actual, sizeof(uint32_t), 1, f);
+        // TODO: This is broken in objdump.
+        //uint64_t name = new_data_offset + total_body_size - base;
+        uint64_t name = 0;
+        fwrite(&name, sizeof(uint32_t), 1, f);
 
         uint32_t type = 1;
         fwrite(&type, sizeof(uint32_t), 1, f);
 
         uint64_t flags = 6;
-        uint64_t actual_offset = new_data_offset + section_header_size * i;
+        uint64_t actual_offset = section_header_size * i + new_data_offset;
         uint64_t addr = 0x400000 | actual_offset;
         uint64_t link = 0;
         uint64_t info = 0;
-        uint64_t align = 16;
         uint64_t ent_size = 0;
 
         if (elf->header.e_ident_class == 1)
         {
             fwrite(&flags, sizeof(uint32_t), 1, f);
-            fwrite(&elf->section_header[i].sh_addr, sizeof(uint32_t), 1, f);
+            fwrite(&addr, sizeof(uint32_t), 1, f);
             fwrite(&actual_offset, sizeof(uint32_t), 1, f);
             fwrite(&elf->new_data[i].size, sizeof(uint32_t), 1, f);
             fwrite(&link, sizeof(uint32_t), 1, f);
@@ -344,7 +349,7 @@ elf_error elf_write(const char* path, const elf_file* elf)
         else
         {
             fwrite(&flags, sizeof(uint64_t), 1, f);
-            fwrite(&elf->section_header[i].sh_addr, sizeof(uint64_t), 1, f);
+            fwrite(&addr, sizeof(uint64_t), 1, f);
             fwrite(&actual_offset, sizeof(uint64_t), 1, f);
             fwrite(&elf->new_data[i].size, sizeof(uint64_t), 1, f);
             fwrite(&link, sizeof(uint32_t), 1, f);
@@ -356,6 +361,13 @@ elf_error elf_write(const char* path, const elf_file* elf)
     // Write the bodies.
     for (uint64_t i = 0; i < elf->new_data_size; i++)
     {
+        // Align.
+        uint64_t cur = ftello(f);
+        if (cur % align != 0)
+            cur += (align - cur % align);
+        fseek(f, cur, SEEK_SET);
+
+        // Write.
         fwrite(elf->new_data[i].data, sizeof(char), elf->new_data[i].size, f);
     }
     // Write the string table.

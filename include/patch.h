@@ -24,6 +24,15 @@ bool patch_get_symbols(const elf_file* elf, char*** str, uint64_t* num);
 /// \returns                `true` if successful, otherwise `false`.
 bool patch_get_symbol(const elf_file* elf, uint64_t idx, elf_symtab* sym);
 
+/// \brief                  Matches all library names against the ones from the target.
+/// \brief  [in]    target  The file to match against.
+/// \brief  [in]    libs    An array of all libraries to match against.
+/// \brief  [ref]   num_lib Number of elements in the array `libs`.
+/// \brief  [ref]   str     An array of matched symbols.
+/// \brief  [ref]   num_str Number of elements in the array `str`.
+/// \returns                `true` if successful, otherwise `false`.
+bool patch_match_symbols(const elf_file* target, const elf_file* libs, uint64_t num_lib, char*** str, uint64_t* num_str);
+
 /// \brief                  Matches all symbols against each other and links the library to the target.
 /// \param  [ref]   target  The ELF to link to.
 /// \param  [in]    library The ELF to link against.

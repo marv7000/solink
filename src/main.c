@@ -14,6 +14,7 @@ int32_t main(const int32_t argc, const char** argv)
     args_parse(&args, argc, argv);
 
     // Open all libraries.
+    // TODO: Potentially unsafe, change to malloc.
     elf_file* libs = alloca(args.num_files * sizeof(elf_file));
     for (uint16_t i = 0; i < args.num_files; i++)
     {
@@ -26,35 +27,17 @@ int32_t main(const int32_t argc, const char** argv)
         }
     }
 
+    const uint64_t last = args.num_files - 1;
+
     // Print library symbols.
     if (!args.quiet)
     {
-        char*** names = (char***)malloc(args.num_files * sizeof(char**));
-        uint64_t* num_names = (uint64_t*)malloc(args.num_files * sizeof(uint64_t));
-        for (uint64_t i = 0; i < args.num_files; i++)
-        {
-            printf("Dynamic symbols provided by \"%s\":\n", args.files[i]);
-            patch_get_symbols(libs + i, names + i, num_names + i);
-            for (uint64_t sym = 0; sym < num_names[i]; sym++)
-                printf("\t%s\n", names[i][sym]);
-        }
-        printf("Matching symbols:\n");
-        // For every executable symbol.
-        for (uint64_t exe = 0; exe < num_names[args.num_files - 1]; exe++)
-        {
-            // For each library.
-            for (uint64_t lib = 0; lib < args.num_files - 1; lib++)
-            {
-                // For each library symbol.
-                for (uint64_t sym = 0; sym < num_names[lib]; sym++)
-                {
-                    if (!strcmp(names[lib][sym], names[args.num_files - 1][exe]))
-                        printf("\t%s\n", names[lib][sym]);
-                }
-            }
-        }
-        free(names);
-        free(num_names);
+        char** names;
+        uint64_t num_names;
+        patch_match_symbols(libs + last, libs, last, &names, &num_names);
+        printf("Linking %lu symbol%s:\n", num_names, num_names == 1 ? "" : "s");
+        for (uint64_t sym = 0; sym < num_names; sym++)
+            printf("[%lu]\t%s\n", sym, names[sym]);
     }
 
     // Create the output ELF.
@@ -62,9 +45,9 @@ int32_t main(const int32_t argc, const char** argv)
     elf_new(&target);
 
     // Patch input executable with all libraries.
-    for (uint16_t i = 0; i < args.num_files - 1; i++)
+    for (uint16_t i = 0; i < last; i++)
     {
-        patch_link_library(libs + args.num_files - 1, libs + i);
+        patch_link_library(libs + last, libs + i);
     }
 
     // Write the result to file.
@@ -75,6 +58,8 @@ int32_t main(const int32_t argc, const char** argv)
         fprintf(stderr, "       %s\n", elf_error_str(written));
         return 1;
     }
+    if (!args.quiet)
+        printf("Wrote the patched binary to \"%s\".\n", args.output);
 
     return 0;
 }

@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include <patch.h>
+#include <string.h>
 
 bool patch_get_dynsym(const elf_file* elf, uint16_t* dynsym, uint16_t* dynstr)
 {
@@ -39,6 +40,47 @@ bool patch_get_symbols(const elf_file* elf, char*** str, uint64_t* num)
         }
     }
     *num = written;
+    return true;
+}
+
+bool patch_match_symbols(const elf_file* target, const elf_file* libs, uint64_t num_lib, char*** str, uint64_t* num_str)
+{
+    if (!target || !libs || num_lib == 0 || !str)
+        return false;
+
+    // Get all symbol names from the target.
+    char** target_sym_names;
+    uint64_t target_sym_num_names;
+    patch_get_symbols(target, &target_sym_names, &target_sym_num_names);
+
+    // Get all symbol names from libraries.
+    char*** sym_names = (char***)malloc(target_sym_num_names * sizeof(char**));
+    uint64_t* sym_num_names = (uint64_t*)malloc(target_sym_num_names * sizeof(uint64_t));;
+    for (uint64_t i = 0; i < num_lib; i++)
+        patch_get_symbols(libs + i, (&sym_names)[i], (&sym_num_names)[i]);
+
+    // Allocate memory.
+    *str = (char**)malloc(target_sym_num_names * sizeof(char*));
+    uint64_t idx = 0;
+
+    // For every executable symbol.
+    for (uint64_t exe = 0; exe < target_sym_num_names; exe++)
+    {
+        // For each library.
+        for (uint64_t lib = 0; lib < num_lib; lib++)
+        {
+            // For each library symbol.
+            for (uint64_t sym = 0; sym < sym_num_names[lib]; sym++)
+            {
+                if (!strcmp(sym_names[lib][sym], target_sym_names[exe]))
+                {
+                    (*str)[idx] = target_sym_names[exe];
+                    idx++;
+                }
+            }
+        }
+    }
+    *num_str = idx;
     return true;
 }
 

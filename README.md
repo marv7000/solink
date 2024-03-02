@@ -2,25 +2,25 @@
 A linker for shared object files
 
 ### About
-`solink` reads ELF exectuables and attempts to satisfy external references by
-reading provided shared objects and patching the executable.
+`solink` reads ELF binaries and attempts to satisfy external references by
+reading provided shared objects and patching the binary.
 A common use case for this tool is for users without access to the 
 source code of an application needing a portable executable without external
 references.
 
-> **_Warning:_** 
-> It's highly discouraged to link against system libraries (such as `glibc`).
-> While this works, it can have unwanted side effects or cause programs to 
-> crash.
-
 ### Usage
 ```
-solink <Flag(s)> [Path to shared object(s)] [Path to executable]
+solink <Flag(s)> [Path to shared object(s)] [Path to target]
 ```
 All flags are optional, but there has to be at least one shared object.
 The last argument is always the executable to be linked to.
 If no arguments are provided, `solink` will output a help text (equivalent to
 `solink --help`).
+
+> **_Warning:_**
+> It's highly discouraged to link against system libraries (such as `glibc`).
+> While this works, it can have unwanted side effects or cause programs to
+> crash.
 
 Example:
 ```sh

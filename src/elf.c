@@ -311,9 +311,8 @@ elf_error elf_write(const char* path, const elf_file* elf)
     uint64_t new_data_offset = pos + new_header_size;
     if (new_data_offset % align != 0)
         new_data_offset += align - pos % align;
-    uint64_t total_body_size = 0;
-    for (uint64_t i = 0; i < elf->new_data_size; i++)
-        total_body_size += elf->new_data[i].size;
+
+    uint64_t data_body_counter = 0;
 
     // Write newly added sections.
     for (uint64_t i = 0; i < elf->new_data_size; i++)
@@ -329,7 +328,10 @@ elf_error elf_write(const char* path, const elf_file* elf)
         fwrite(&type, sizeof(uint32_t), 1, f);
 
         uint64_t flags = 6;
-        uint64_t actual_offset = section_header_size * i + new_data_offset;
+        uint64_t actual_offset = new_data_offset + data_body_counter;
+        data_body_counter += elf->new_data[i].size;
+        if (data_body_counter % align != 0)
+            data_body_counter += align - data_body_counter % align;
         uint64_t addr = 0x400000 | actual_offset;
         uint64_t link = 0;
         uint64_t info = 0;

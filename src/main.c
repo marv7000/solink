@@ -1,7 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #include <args.h>
 #include <elf.h>
@@ -40,7 +39,7 @@ int32_t main(const int32_t argc, const char** argv)
             printf("[%lu]\t%s\n", sym, names[sym]);
     }
 
-    // Create the output ELF.
+    // Get the output ELF.
     elf_file* target = libs + last;
 
     // Patch input executable with all libraries.

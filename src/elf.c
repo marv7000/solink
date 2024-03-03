@@ -318,8 +318,8 @@ elf_error elf_write(const char* path, const elf_file* elf)
     for (uint64_t i = 0; i < elf->new_data_size; i++)
     {
         // Calculate name offset.
-        uint64_t base = elf->section_header[elf->header.e_shstrndx].sh_offset;
         // TODO: This is broken in objdump.
+        //uint64_t base = elf->section_header[elf->header.e_shstrndx].sh_offset;
         //uint64_t name = new_data_offset + total_body_size - base;
         uint64_t name = 0;
         fwrite(&name, sizeof(uint32_t), 1, f);

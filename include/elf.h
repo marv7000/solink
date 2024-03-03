@@ -13,6 +13,15 @@ typedef enum
     ELF_INVALID_VERSION
 } elf_error;
 
+typedef enum {
+    EM_NONE         = 0,
+    EM_386          = 3,
+    EM_ARM          = 40,
+    EM_X86_64       = 62,
+    EM_AARCH64      = 183,
+    EM_RISCV        = 243
+} elf_machine;
+
 typedef struct
 {
     uint32_t sym_name;

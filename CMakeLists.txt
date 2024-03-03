@@ -11,6 +11,7 @@ add_executable(solink
     src/args.c
     src/elf.c
     src/patch.c
+	src/instr.c
 )
 
 target_compile_definitions(solink PRIVATE SOLINK_VER_MAJ="${SOLINK_VER_MAJ}")

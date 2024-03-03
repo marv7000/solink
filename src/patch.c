@@ -3,6 +3,7 @@
 
 #include <patch.h>
 #include <string.h>
+#include <instr.h>
 
 bool patch_get_dynsym(const elf_file* elf, uint16_t* dynsym, uint16_t* dynstr)
 {
@@ -78,13 +79,15 @@ bool patch_match_symbols(const elf_file* target, const elf_file* libs, uint64_t 
     // Get all symbol names from the target.
     char** target_sym_names;
     uint64_t target_sym_num_names;
-    patch_get_symbols(target, &target_sym_names, &target_sym_num_names);
+    if (!patch_get_symbols(target, &target_sym_names, &target_sym_num_names))
+        return false;
 
     // Get all symbol names from libraries.
-    char*** sym_names = (char***)malloc(target_sym_num_names * sizeof(char**));
-    uint64_t* sym_num_names = (uint64_t*)malloc(target_sym_num_names * sizeof(uint64_t));;
+    char*** sym_names = (char***)malloc(num_lib * sizeof(char**));
+    uint64_t* sym_num_names = (uint64_t*)malloc(num_lib * sizeof(uint64_t));
     for (uint64_t i = 0; i < num_lib; i++)
-        patch_get_symbols(libs + i, (&sym_names)[i], (&sym_num_names)[i]);
+        if (!patch_get_symbols(&libs[i], &sym_names[i], &sym_num_names[i]))
+            return false;
 
     // Allocate memory.
     *str = (char**)malloc(target_sym_num_names * sizeof(char*));
@@ -117,7 +120,8 @@ bool patch_link_library(elf_file* target, const elf_file* library)
 {
     char** names;
     uint64_t num_names;
-    patch_get_symbols(target, &names, &num_names);
+    if (!patch_get_symbols(target, &names, &num_names))
+        return false;
     for (uint64_t sym = 0; sym < num_names; sym++)
     {
         // Deliberately ignoring result, as not all symbols might be used.

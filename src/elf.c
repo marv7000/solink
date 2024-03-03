@@ -410,7 +410,8 @@ bool elf_get_section_name(const elf_file* elf, uint16_t idx, char** name)
         return false;
     if (idx > elf->header.e_shnum)
         return false;
-    *name = (char*)(elf->section_data[elf->header.e_shstrndx] + elf->section_header[idx].sh_name);
+    uint8_t* data = elf->data + elf->section_header[elf->header.e_shstrndx].sh_offset;
+    *name = (char*)(data + elf->section_header[idx].sh_name);
     return true;
 }
 

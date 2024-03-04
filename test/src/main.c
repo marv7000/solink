@@ -3,6 +3,7 @@
 
 int main(const int argc, const char** argv)
 {
+	printf("Output:\n");
     printf("test_lib_add(3, 5) = %i\n", test_lib_add(3, 5));
     printf("test_lib_mul(2, 4) = %i\n", test_lib_mul(2, 4));
     printf("test_lib_sub(9, 1) = %i\n", test_lib_sub(9, 1));

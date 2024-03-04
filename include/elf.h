@@ -3,6 +3,8 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+#include <str.h>
+
 typedef enum
 {
     ELF_OK,
@@ -69,7 +71,7 @@ typedef struct
     uint8_t e_ident_osabi;
     uint8_t e_ident_abiversion;
     uint16_t e_type;
-    uint16_t e_machine;
+	elf_machine e_machine;
     uint32_t e_version;
     uint64_t e_entry;
     uint64_t e_phoff;
@@ -85,7 +87,7 @@ typedef struct
 
 typedef struct
 {
-    char* name;
+    str name;
     uint8_t* data;
     size_t size;
 } elf_new_section;
@@ -135,27 +137,27 @@ char* elf_error_str(elf_error err);
 /// \param  [in]    path    The file path to the ELF.
 /// \param  [out]   elf     The deserialized ELF.
 /// \returns                ELF_OK if successful, any other value indicates failure.
-elf_error elf_read(const char* path, elf_file* elf);
+elf_error elf_read(str path, elf_file* elf);
 
 /// \brief                  Writes an ELF struct to file.
 /// \param  [in]    path    The file path to save to.
 /// \param  [in]    elf     The deserialized ELF.
 /// \returns                ELF_OK if successful, any other value indicates failure.
-elf_error elf_write(const char* path, const elf_file* elf);
+elf_error elf_write(str path, const elf_file* elf);
 
 /// \brief                  Finds a section by name and gets its index.
 /// \param  [in]    name    The name of the section.
 /// \param  [in]    elf     The deserialized ELF.
 /// \param  [out]   idx     The index of the section, if function returned `ELF_OK`.
 /// \returns                `true` if successful, otherwise `false`.
-bool elf_find_section(const char* name, const elf_file* elf, uint16_t* idx);
+bool elf_find_section(str name, const elf_file* elf, uint16_t* idx);
 
 /// \brief                  Gets the name of a section at the given index.
 /// \param  [in]    elf     The file where the section is stored.
 /// \param  [in]    idx     The index of the section to get the name of.
-/// \param  [out]   name    A reference to a pointer for writing the string address.
+/// \param  [out]   name    A reference to a string.
 /// \returns                `true` if successful, otherwise `false`.
-bool elf_get_section_name(const elf_file* elf, uint16_t idx, char** name);
+bool elf_get_section_name(const elf_file* elf, uint16_t idx, str* name);
 
 /// \brief                  Adds a new section to the ELF.
 /// \param  [ref]   elf     The file to add a new section to.

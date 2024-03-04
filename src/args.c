@@ -6,7 +6,7 @@
 #include <args.h>
 #include <about.h>
 
-void args_parse(arguments* args, int32_t argc, const char** argv)
+void args_parse(arguments* args, int32_t argc, str* argv)
 {
     // If no additional arguments are provided, just print the About text.
     if (argc == 1)
@@ -17,54 +17,54 @@ void args_parse(arguments* args, int32_t argc, const char** argv)
 
     // Initialize library array. Size isn't exact here, but close to the amount we need.
     if (!args->files)
-        args->files = calloc(sizeof(char*), argc - 2);
+        args->files = calloc(sizeof(str), argc);
 
     // Parse all arguments, but exclude first (self).
     for (int32_t i = 1; i < argc; i++)
     {
-        if (!strcmp(argv[i], "-o") || !strcmp(argv[i], "--output"))
+        if (str_equal_c(argv[i], "-o") || str_equal_c(argv[i], "--output"))
         {
             // Check if we have sufficient arguments.
             if (i + 1 >= argc)
             {
-                fprintf(stderr, "Error: %s is missing an argument!\n", argv[i]);
+                fprintf(stderr, "Error: %s is missing an argument!\n", str_cstr(argv[i]));
                 exit(1);
             }
             args->output = argv[i + 1];
             i++;
         }
-        else if (!strcmp(argv[i], "-s") || !strcmp(argv[i], "--symbol"))
+        else if (str_equal_c(argv[i], "-s")|| str_equal_c(argv[i], "--symbol"))
         {
             // Check if we have sufficient arguments.
             if (i + 1 >= argc)
             {
-                fprintf(stderr, "Error: %s is missing an argument!\n", argv[i]);
+                fprintf(stderr, "Error: %s is missing an argument!\n", str_cstr(argv[i]));
                 exit(1);
             }
 
             i++;
         }
-        else if (!strcmp(argv[i], "-f") || !strcmp(argv[i], "--force"))
+        else if (str_equal_c(argv[i], "-f") || str_equal_c(argv[i], "--force"))
         {
             args->force = true;
         }
-        else if (!strcmp(argv[i], "-q") || !strcmp(argv[i], "--quiet"))
+        else if (str_equal_c(argv[i], "-q") || str_equal_c(argv[i], "--quiet"))
         {
             args->quiet = true;
         }
-        else if (!strcmp(argv[i], "-v") || !strcmp(argv[i], "--version"))
+        else if (str_equal_c(argv[i], "-v") || str_equal_c(argv[i], "--version"))
         {
             args->version = true;
             break;
         }
-        else if (!strcmp(argv[i], "--help"))
+        else if (str_equal_c(argv[i], "--help"))
         {
             args->help = true;
             break;
         }
-        else if (argv[i][0] == '-')
+        else if (str_cstr(argv[i])[0] == '-')
         {
-            fprintf(stderr, "Error: Unknown argument \"%s\"\n", argv[i]);
+            fprintf(stderr, "Error: Unknown argument \"%s\"\n", str_cstr(argv[i]));
             exit(1);
         }
         else
@@ -72,7 +72,7 @@ void args_parse(arguments* args, int32_t argc, const char** argv)
             // Check if the file exists.
             if (!args_check_file(argv[i]))
             {
-                fprintf(stderr, "Error: \"%s\": %s\n", argv[i], strerror(errno));
+                fprintf(stderr, "Error: \"%s\": %s\n", str_cstr(argv[i]), strerror(errno));
                 exit(1);
             }
 
@@ -103,20 +103,20 @@ void args_parse(arguments* args, int32_t argc, const char** argv)
     }
 
     // If no output file was given, append a suffix it to the input path.
-    if (!args->output)
+    if (str_empty(args->output))
     {
-        const char output_suffix[] = "_patch";
-        const size_t len = strlen(args->files[args->num_files - 1]) + sizeof(output_suffix) + 1;
-        char* buf = (char*)malloc(len);
-        snprintf(buf, len, "%s%s", args->files[args->num_files - 1], output_suffix);
-        args->output = buf;
+        str suffix = str_new_text("_patch");
+		str name = str_copy(args->files[args->num_files - 1]);
+        str_concat(&name, suffix);
+        str_free(suffix);
+		args->output = name;
     }
 }
 
-bool args_check_file(const char* path)
+bool args_check_file(str path)
 {
     FILE* file;
-    file = fopen(path, "r");
+    file = fopen(str_cstr(path), "r");
     if (!file)
         return false;
     fclose(file);

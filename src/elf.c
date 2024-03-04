@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include <elf.h>
+#include <instr.h>
 
 elf_error elf_check(const elf_file* elf)
 {
@@ -67,13 +68,13 @@ elf_error elf_free(elf_file* elf)
     return ELF_OK;
 }
 
-elf_error elf_read(const char* path, elf_file* elf)
+elf_error elf_read(str path, elf_file* elf)
 {
-    if (!elf || !path)
+    if (!elf || str_empty(path))
         return ELF_NONE;
 
     elf_error err;
-    FILE* f = fopen(path, "r");
+    FILE* f = fopen(str_cstr(path), "r");
 
     // Clear the struct.
     memset(elf, 0, sizeof(elf_file));
@@ -205,16 +206,16 @@ elf_error elf_read(const char* path, elf_file* elf)
     return ELF_OK;
 }
 
-elf_error elf_write(const char* path, const elf_file* elf)
+elf_error elf_write(str path, const elf_file* elf)
 {
-    if (!path || !elf)
+    if (str_empty(path) || !elf)
         return ELF_NONE;
 
     elf_error err = elf_check(elf);
     if (err != ELF_OK)
         return err;
     
-    FILE* f = fopen(path, "w");
+    FILE* f = fopen(str_cstr(path), "w");
 
     // Write the body, then seek over it again, so it can be overwritten.
     fwrite(elf->data, sizeof(uint8_t), elf->size, f);
@@ -256,6 +257,21 @@ elf_error elf_write(const char* path, const elf_file* elf)
     uint16_t sh_fix = elf->header.e_shnum + elf->new_data_size;
     fwrite(&sh_fix, sizeof(uint16_t), 1, f);
     fwrite(&elf->header.e_shstrndx, sizeof(uint16_t), 1, f);
+
+	// TODO: This is just a hardcoded overwrite for a random note section that we use to load our patched instructions.
+	// FIXME: Actually insert a new program header.
+	off_t cur_ph = ftello(f);
+	fseek(f, 0, SEEK_END);
+	elf->program_header[7].p_type = 1;
+	elf->program_header[7].p_flags = 5;
+	elf->program_header[7].p_offset = elf->size + (elf->new_data_size * 64);
+	elf->program_header[7].p_paddr = 0x400000 | elf->program_header[7].p_offset;
+	elf->program_header[7].p_vaddr = 0x400000 | elf->program_header[7].p_offset;
+	elf->program_header[7].p_filesz = 90;
+	elf->program_header[7].p_memsz = 90;
+	elf->program_header[7].p_align = 4096;
+
+	fseek(f, cur_ph, SEEK_SET);
 
     fseek(f, (long)elf->header.e_phoff, SEEK_SET);
     for (uint16_t i = 0; i < elf->header.e_phnum; i++)
@@ -323,6 +339,12 @@ elf_error elf_write(const char* path, const elf_file* elf)
 
     uint64_t data_body_counter = 0;
 
+	// Seek to the start of the PLT and skip the GOT entry.
+	uint16_t plt;
+	elf_find_section(str_new_text(".plt"), elf, &plt);
+	uint64_t plt_offset = elf->section_header[plt].sh_offset + 0x30;
+	uint64_t plt_virt_offset = elf->section_header[plt].sh_addr + 0x30;
+
     // Write newly added sections.
     for (uint64_t i = 0; i < elf->new_data_size; i++)
     {
@@ -330,6 +352,7 @@ elf_error elf_write(const char* path, const elf_file* elf)
         // TODO: This is broken in objdump.
         //uint64_t base = elf->section_header[elf->header.e_shstrndx].sh_offset;
         //uint64_t name = new_data_offset + total_body_size - base;
+
         uint64_t name = 0;
         fwrite(&name, sizeof(uint32_t), 1, f);
 
@@ -346,6 +369,20 @@ elf_error elf_write(const char* path, const elf_file* elf)
         uint64_t info = 0;
         uint64_t ent_size = 0;
 
+		printf("%#lx\n", addr);
+
+		off_t old_pos = ftello(f);
+
+	    // Overwrite the .plt section with relative jumps.
+	    fseeko(f, (off_t)(plt_offset + 0x10 * i), SEEK_SET);
+		uint32_t offset = addr - ((uint32_t)plt_virt_offset + 0x10 * i);
+
+		// Write the instruction.
+	    uint8_t instr[16];
+	    instr_get_bytes(elf->header.e_machine, offset, instr);
+		fwrite(&instr, sizeof(uint8_t), 16, f);
+
+		fseeko(f, old_pos, SEEK_SET);
         if (elf->header.e_ident_class == 1)
         {
             fwrite(&flags, sizeof(uint32_t), 1, f);
@@ -373,7 +410,7 @@ elf_error elf_write(const char* path, const elf_file* elf)
     for (uint64_t i = 0; i < elf->new_data_size; i++)
     {
         // Align.
-        uint64_t cur = ftello(f);
+        off_t cur = ftello(f);
         if (cur % align != 0)
             cur += (align - cur % align);
         fseek(f, cur, SEEK_SET);
@@ -381,32 +418,34 @@ elf_error elf_write(const char* path, const elf_file* elf)
         // Write.
         fwrite(elf->new_data[i].data, sizeof(char), elf->new_data[i].size, f);
     }
-    // Write the string table.
-    // for (uint64_t i = 0; i < elf->new_data_size; i++)
-    // {
-    //     fwrite(elf->new_data[i].name, sizeof(char), strlen(elf->new_data[i].name) + 1, f);
-    // }
 
-    // Write a marker at the end to let solink know that this ELF has been patched.
-    fwrite(".patched", sizeof(uint64_t), 1, f);
+	// Write the string table.
+	// TODO: Broken in objdump for some reason.
+	// for (uint64_t i = 0; i < elf->new_data_size; i++)
+	// {
+	//     fwrite(elf->new_data[i].name, sizeof(char), strlen(elf->new_data[i].name) + 1, f);
+	// }
+
+	// Write a marker at the end to let solink know that this ELF has been patched.
+	fwrite(".patched", sizeof(uint64_t), 1, f);
 
     // Clean up.
     fclose(f);
     return ELF_OK;
 }
 
-bool elf_find_section(const char* name, const elf_file* elf, uint16_t* idx)
+bool elf_find_section(str name, const elf_file* elf, uint16_t* idx)
 {
-    if (!name || !elf || !idx)
+    if (str_empty(name) || !elf || !idx)
         return false;
 
     // For every section header.
     for (uint16_t sect = 0; sect < elf->header.e_shnum; sect++)
     {
         // Seek to the string table + name offset.
-        char* string_off;
+        str string_off;
         elf_get_section_name(elf, sect, &string_off);
-        if (strcmp((char*)string_off, name) == 0)
+        if (str_equal(string_off, name))
         {
             *idx = sect;
             return true;
@@ -416,14 +455,14 @@ bool elf_find_section(const char* name, const elf_file* elf, uint16_t* idx)
     return false;
 }
 
-bool elf_get_section_name(const elf_file* elf, uint16_t idx, char** name)
+bool elf_get_section_name(const elf_file* elf, uint16_t idx, str* name)
 {
     if (!elf || !name)
         return false;
     if (idx > elf->header.e_shnum)
         return false;
     uint8_t* data = elf->data + elf->section_header[elf->header.e_shstrndx].sh_offset;
-    *name = (char*)(data + elf->section_header[idx].sh_name);
+    *name = str_new_text((char*)(data + elf->section_header[idx].sh_name));
     return true;
 }
 

@@ -2,14 +2,15 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include <str.h>
+
 typedef struct
 {
     uint16_t num_files;
-    const char** files;
-
-    const char* output;
+    str* files;
+    str output;
     uint32_t num_symbols;
-    const char** symbols;
+    str* symbols;
     bool force;
     bool quiet;
     bool version;
@@ -21,9 +22,9 @@ typedef struct
 /// \param  [out]   args    The parsed arguments.
 /// \param          argc    The amount of arguments in `argv`.
 /// \param  [in]    argv    The argument vector.
-void args_parse(arguments* args, int32_t argc, const char** argv);
+void args_parse(arguments* args, int32_t argc, str* argv);
 
-/// \brief      Checks if the path is a valid file.
-/// \param path The path to the file.
-/// \return     True if valid, false otherwise.
-bool args_check_file(const char* path);
+/// \brief                  Checks if the path is a valid file.
+/// \param  [in]    path    The path to the file.
+/// \returns                True if valid, false otherwise.
+bool args_check_file(str path);

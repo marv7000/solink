@@ -1,11 +1,13 @@
 #pragma once
 #include <stdint.h>
+#include <stddef.h>
 #include <stdbool.h>
 
 typedef enum
 {
     ELF_OK,
     ELF_NONE,
+    ELF_ALREADY_PATCHED,
     ELF_UNSUPPORTED_ARCH,
     ELF_INVALID_MAGIC,
     ELF_INVALID_IDENT_CLASS,

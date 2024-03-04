@@ -101,6 +101,16 @@ void args_parse(arguments* args, int32_t argc, const char** argv)
         fprintf(stderr, "Error: Need at least 1 library and exactly 1 executable to link!\n");
         exit(1);
     }
+
+    // If no output file was given, append a suffix it to the input path.
+    if (!args->output)
+    {
+        const char output_suffix[] = "_patch";
+        const size_t len = strlen(args->files[args->num_files - 1]) + sizeof(output_suffix) + 1;
+        char* buf = (char*)malloc(len);
+        snprintf(buf, len, "%s%s", args->files[args->num_files - 1], output_suffix);
+        args->output = buf;
+    }
 }
 
 bool args_check_file(const char* path)

@@ -22,8 +22,11 @@ elf_error elf_check(const elf_file* elf)
     if (elf->header.e_version != 1)
         return ELF_INVALID_VERSION;
     // Machine has to be x86_64.
-    if (elf->header.e_machine != 0x3e)
+    if (elf->header.e_machine != EM_X86_64)
         return ELF_UNSUPPORTED_ARCH;
+    // ELF cannot be patched already.
+    if (elf->data && *(uint64_t*)(&elf->data[elf->size - 8]) == *(const uint64_t*)".patched")
+        return ELF_ALREADY_PATCHED;
 
     return ELF_OK;
 }
@@ -190,6 +193,12 @@ elf_error elf_read(const char* path, elf_file* elf)
     fseek(f, 0, SEEK_SET);
     elf->data = (uint8_t*)malloc(elf->size);
     fread(elf->data, sizeof(uint8_t), elf->size, f);
+
+
+    // Check ELF again.
+    err = elf_check(elf);
+    if (err != ELF_OK)
+        return err;
 
     // Clean up.
     fclose(f);
@@ -373,10 +382,13 @@ elf_error elf_write(const char* path, const elf_file* elf)
         fwrite(elf->new_data[i].data, sizeof(char), elf->new_data[i].size, f);
     }
     // Write the string table.
-    for (uint64_t i = 0; i < elf->new_data_size; i++)
-    {
-        fwrite(elf->new_data[i].name, sizeof(char), strlen(elf->new_data[i].name) + 1, f);
-    }
+    // for (uint64_t i = 0; i < elf->new_data_size; i++)
+    // {
+    //     fwrite(elf->new_data[i].name, sizeof(char), strlen(elf->new_data[i].name) + 1, f);
+    // }
+
+    // Write a marker at the end to let solink know that this ELF has been patched.
+    fwrite(".patched", sizeof(uint64_t), 1, f);
 
     // Clean up.
     fclose(f);
@@ -421,6 +433,8 @@ char* elf_error_str(elf_error err)
     {
         case ELF_NONE:
             return "No data given. (ELF_NONE)";
+        case ELF_ALREADY_PATCHED:
+            return "ELF has already been patched. (ELF_ALREADY_PATCHED)";
         case ELF_UNSUPPORTED_ARCH:
             return "Unsupported machine architecture. (ELF_UNSUPPORTED_ARCH)";
         case ELF_INVALID_MAGIC:

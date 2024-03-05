@@ -19,3 +19,8 @@ _deps
 .vscode/
 .vs/
 .idea/
+
+
+# Added by cargo
+
+/target

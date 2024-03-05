@@ -1,5 +1,4 @@
 #include <instr.h>
-#include <stdio.h>
 
 bool instr_get_bytes(elf_machine type, uint32_t offset, uint8_t instr[16])
 {

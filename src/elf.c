@@ -342,8 +342,8 @@ elf_error elf_write(str path, const elf_file* elf)
 	// Seek to the start of the PLT and skip the GOT entry.
 	uint16_t plt;
 	elf_find_section(str_new_text(".plt"), elf, &plt);
-	uint64_t plt_offset = elf->section_header[plt].sh_offset + 0x30;
-	uint64_t plt_virt_offset = elf->section_header[plt].sh_addr + 0x30;
+	uint64_t plt_offset = elf->section_header[plt].sh_offset + 0x10;
+	uint64_t plt_virt_offset = elf->section_header[plt].sh_addr + 0x10;
 
     // Write newly added sections.
     for (uint64_t i = 0; i < elf->new_data_size; i++)
@@ -368,20 +368,23 @@ elf_error elf_write(str path, const elf_file* elf)
         uint64_t link = 0;
         uint64_t info = 0;
         uint64_t ent_size = 0;
-
-		printf("%#lx\n", addr);
-
 		off_t old_pos = ftello(f);
 
 	    // Overwrite the .plt section with relative jumps.
+		// Find the offset for this function.
+		uint64_t fn_offset = 0;
+
+
+		// Seek to that offset.
 	    fseeko(f, (off_t)(plt_offset + 0x10 * i), SEEK_SET);
 		uint32_t offset = addr - ((uint32_t)plt_virt_offset + 0x10 * i);
 
-		// Write the instruction.
+		// Write the instruction for the relative jump.
 	    uint8_t instr[16];
 	    instr_get_bytes(elf->header.e_machine, offset, instr);
 		fwrite(&instr, sizeof(uint8_t), 16, f);
 
+		// Write the rest of the header.
 		fseeko(f, old_pos, SEEK_SET);
         if (elf->header.e_ident_class == 1)
         {

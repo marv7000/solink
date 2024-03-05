@@ -1,5 +1,5 @@
-# solink
-A linker for shared object files
+> ### Disclaimer
+> `solink` is currently still in development and doesn't produce working binaries yet.
 
 ### About
 `solink` reads ELF binaries and attempts to satisfy external references by
@@ -37,3 +37,7 @@ cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 cmake --build .
 ```
+
+### Contributing
+All contributions are welcome! Please feel free to get in touch if you're having
+any issues or have a feature to suggest.

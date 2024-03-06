@@ -8,11 +8,6 @@ By default, `solink` wil add a `_patched` suffix to the input executable name.
 Only match the given symbol. 
 Multiple `-s` flags can be chained together.
 
-### `-f` `--force`
-Forcefully match all external symbols. 
-Instead of a warning, the program will exit with a non-zero exit code if one
-symbol failed to match.
-
 ### `-q` `--quiet`
 Don't write any messages to the standard output.
 

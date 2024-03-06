@@ -164,13 +164,19 @@ impl Elf {
         Ok(())
     }
 
-    pub fn link(&mut self, other: &Elf, force: bool) {
-        // Get all exported functions from the other ELF.
-        let matched_fns = other
-            .dynamic_symbols
-            .iter()
+    /// Returns an IndexMap with names and symbol references.
+    pub fn get_functions(&self) -> IndexMap<String, Symbol> {
+        self.dynamic_symbols
+            .clone()
+            .into_iter()
             .filter(|(x, y)| self.dynamic_symbols.contains_key(x.as_str()) && y.sym_info == 0x12)
-            .collect::<Vec<_>>();
+            .collect::<IndexMap<String, Symbol>>()
+    }
+
+    /// Links an ELF to self.
+    pub fn link(&mut self, other: &Elf) {
+        // Get all exported functions from the other ELF.
+        let matched_fns = other.get_functions();
 
         // Get all imported functions from
         dbg!(&matched_fns);

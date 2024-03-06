@@ -10,10 +10,9 @@ references.
 
 ### Usage
 ```
-solink <Flag(s)> [Path to shared object(s)] [Path to target]
+solink <Flag(s)> [Path to target] [Path to shared object(s)]
 ```
 All flags are optional, but there has to be at least one shared object.
-The last argument is always the executable to be linked to.
 If no arguments are provided, `solink` will output a help text (equivalent to
 `solink --help`).
 
@@ -32,10 +31,7 @@ For a list of flags and options, see the [documentation](docs/flags.md).
 
 ### Building
 ```sh
-mkdir build
-cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-cmake --build .
+cargo build --release
 ```
 
 ### Contributing

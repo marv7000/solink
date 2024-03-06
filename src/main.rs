@@ -21,14 +21,6 @@ struct Args {
         short,
         long,
         default_value = "false",
-        help = "Forcefully match all external symbols."
-    )]
-    force: bool,
-
-    #[arg(
-        short,
-        long,
-        default_value = "false",
         help = "Don't write any messages to the standard output."
     )]
     quiet: bool,
@@ -49,7 +41,7 @@ fn main() {
         let mut file_lib = File::open(lib).unwrap();
         let elf_lib = Elf::read(&mut file_lib).unwrap();
 
-        elf_exe.link(&elf_lib, args.force);
+        elf_exe.link(&elf_lib);
     }
 
     // Get output name or create one.

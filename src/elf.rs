@@ -1,12 +1,12 @@
 use byteordered::{ByteOrdered, Endianness};
+use indexmap::IndexMap;
 use std::{
-    collections::HashMap,
     error::Error,
     fs::File,
-    io::{Read, Seek, SeekFrom},
+    io::{Read, Seek, SeekFrom, Write},
 };
 
-use crate::ext::ReadExt;
+use crate::ext::{ReadExt, SeekExt, WriteExt};
 
 #[derive(Debug, Clone)]
 pub enum MachineType {
@@ -54,7 +54,7 @@ pub struct Section {
 }
 
 impl Section {
-    fn new() -> Self {
+    pub fn new(data: Vec<u8>) -> Self {
         Self {
             header: SectionHeader {
                 sh_name: 0,
@@ -62,13 +62,13 @@ impl Section {
                 sh_flags: 0,
                 sh_addr: 0,
                 sh_offset: 0,
-                sh_size: 0,
+                sh_size: data.len() as u64,
                 sh_link: 0,
                 sh_info: 0,
                 sh_addralign: 0,
-                sh_entsize: 0,
+                sh_entsize: 1,
             },
-            body: Vec::new(),
+            body: data,
         }
     }
 }
@@ -87,35 +87,35 @@ pub struct ProgramHeader {
 
 #[derive(Debug, Clone)]
 pub struct Header {
-    ei_magic: [u8; 4],
-    ei_class: Class,
-    ei_data: Endianness,
-    ei_version: u8,
-    ei_osabi: u8,
-    ei_abiversion: u8,
-    ei_pad: [u8; 7],
-    e_type: u16,
-    e_machine: MachineType,
-    e_version: u32,
-    e_entry: u64,
-    e_phoff: u64,
-    e_shoff: u64,
-    e_flags: u32,
-    e_ehsize: u16,
-    e_phentsize: u16,
-    e_phnum: u16,
-    e_shentsize: u16,
-    e_shnum: u16,
-    e_shstrndx: u16,
+    pub ei_magic: [u8; 4],
+    pub ei_class: Class,
+    pub ei_data: Endianness,
+    pub ei_version: u8,
+    pub ei_osabi: u8,
+    pub ei_abiversion: u8,
+    pub ei_pad: [u8; 7],
+    pub e_type: u16,
+    pub e_machine: MachineType,
+    pub e_version: u32,
+    pub e_entry: u64,
+    pub e_phoff: u64,
+    pub e_shoff: u64,
+    pub e_flags: u32,
+    pub e_ehsize: u16,
+    pub e_phentsize: u16,
+    pub e_phnum: u16,
+    pub e_shentsize: u16,
+    pub e_shnum: u16,
+    pub e_shstrndx: u16,
 }
 
 #[derive(Debug, Clone)]
 pub struct Elf {
-    header: Header,
-    programs: Vec<ProgramHeader>,
-    sections: HashMap<String, Section>,
-    symbols: HashMap<String, Symbol>,
-    dynamic_symbols: HashMap<String, Symbol>,
+    pub header: Header,
+    pub programs: Vec<ProgramHeader>,
+    pub sections: IndexMap<String, Section>,
+    pub symbols: IndexMap<String, Symbol>,
+    pub dynamic_symbols: IndexMap<String, Symbol>,
 }
 
 impl Elf {
@@ -136,7 +136,7 @@ impl Elf {
                 e_phoff: 0,
                 e_shoff: 0,
                 e_flags: 0,
-                e_ehsize: 0,
+                e_ehsize: 0x40,
                 e_phentsize: 0,
                 e_phnum: 0,
                 e_shentsize: 0,
@@ -144,10 +144,66 @@ impl Elf {
                 e_shstrndx: 0,
             },
             programs: Vec::new(),
-            sections: HashMap::new(),
-            symbols: HashMap::new(),
-            dynamic_symbols: HashMap::new(),
+            sections: IndexMap::new(),
+            symbols: IndexMap::new(),
+            dynamic_symbols: IndexMap::new(),
         };
+    }
+
+    pub fn add_program(&mut self, program: ProgramHeader) -> Result<(), Box<dyn Error>> {
+        self.programs.push(program);
+
+        Ok(())
+    }
+
+    pub fn add_section(&mut self, name: String, section: Section) -> Result<(), Box<dyn Error>> {
+        self.sections.insert(name, section);
+
+        Ok(())
+    }
+
+    pub fn link(&mut self, other: &Elf) {
+        todo!();
+    }
+
+    pub fn update(&mut self) -> Result<(), Box<dyn Error>> {
+        // Get base offset (ELF header + program headers).
+        let base = self.header.e_ehsize as u64
+            + (self.header.e_phentsize as u64 * self.header.e_phnum as u64);
+
+        // Update program header sizes + offsets.
+        // TODO
+
+        // Update section sizes + offsets.
+        let mut section_pos = base;
+        for (_, section) in &mut self.sections {
+            section.header.sh_offset = section_pos;
+            // Add the size of this section to the current cursor.
+            section_pos += section.body.len() as u64;
+            // Align.
+            if section.header.sh_addralign != 0 && section_pos % section.header.sh_addralign != 0 {
+                section_pos +=
+                    section.header.sh_addralign - section_pos % section.header.sh_addralign;
+            }
+        }
+
+        // Update symbol string table.
+        // TODO
+
+        // Update section string table.
+        let mut shstr_data = vec![0u8];
+        let mut shstr_pos = 1;
+        for (name, section) in &mut self.sections {
+            shstr_data.write_cstr(name)?;
+            section.header.sh_name = shstr_pos as u32;
+            shstr_pos += name.len() + 1;
+        }
+        self.header.e_shstrndx = self.sections.get_index_of(".shstrtab").unwrap() as u16;
+        let shstr_tab = &mut self.sections[".shstrtab"];
+        shstr_tab.body = shstr_data;
+        shstr_tab.header.sh_size = shstr_pos as u64;
+
+        Ok(())
     }
 
     pub fn read(input: &mut File) -> Result<Self, Box<dyn Error>> {
@@ -346,6 +402,78 @@ impl Elf {
         }
         r.seek(SeekFrom::Start(0))?;
 
+        // Finalize.
+        result.update()?;
         return Ok(result);
+    }
+
+    pub fn write(&mut self, output: &mut File) -> Result<(), Box<dyn Error>> {
+        let mut w = ByteOrdered::runtime(output, Endianness::Little);
+        self.update()?;
+
+        // Write header.
+        w.write_all(&self.header.ei_magic)?;
+        w.write_u8(self.header.ei_class.clone() as u8)?;
+        w.write_u8(self.header.ei_data as u8 + 1)?; // 1 is Little, 2 is Big.
+        w.write_u8(self.header.ei_version)?;
+        w.write_u8(self.header.ei_osabi)?;
+        w.write_u8(self.header.ei_abiversion)?;
+        w.write_all(&self.header.ei_pad)?;
+        w.set_endianness(self.header.ei_data);
+        w.write_u16(self.header.e_type)?;
+        w.write_u16(self.header.e_machine.clone() as u16)?;
+        w.write_u32(self.header.e_version)?;
+        w.write_class(self.header.e_entry, &self.header.ei_class)?;
+        w.write_class(self.header.e_phoff, &self.header.ei_class)?;
+        w.write_class(self.header.e_shoff, &self.header.ei_class)?;
+        w.write_u32(self.header.e_flags)?;
+        w.write_u16(self.header.e_ehsize)?;
+        w.write_u16(self.header.e_phentsize)?;
+        w.write_u16(self.programs.len() as u16)?;
+        w.write_u16(self.header.e_shentsize)?;
+        w.write_u16(self.sections.len() as u16)?;
+        w.write_u16(self.header.e_shstrndx)?;
+
+        // Write program headers.
+        for program in &self.programs {
+            w.write_u32(program.p_type)?;
+            match &self.header.ei_class {
+                Class::Class64 => w.write_u32(program.p_flags)?,
+                Class::Class32 => (),
+            };
+            w.write_class(program.p_offset, &self.header.ei_class)?;
+            w.write_class(program.p_vaddr, &self.header.ei_class)?;
+            w.write_class(program.p_paddr, &self.header.ei_class)?;
+            w.write_class(program.p_filesz, &self.header.ei_class)?;
+            w.write_class(program.p_memsz, &self.header.ei_class)?;
+            match &self.header.ei_class {
+                Class::Class64 => (),
+                Class::Class32 => w.write_u32(program.p_flags)?,
+            };
+            w.write_class(program.p_align, &self.header.ei_class)?;
+        }
+
+        // Write section bodies.
+        for (_, section) in &self.sections {
+            w.align(section.header.sh_addralign)?;
+            w.write(&section.body)?;
+        }
+
+        // Write section header.
+        w.seek(SeekFrom::Start(self.header.e_shoff))?;
+        for (_, section) in &self.sections {
+            w.write_u32(section.header.sh_name)?;
+            w.write_u32(section.header.sh_type)?;
+            w.write_class(section.header.sh_flags, &self.header.ei_class)?;
+            w.write_class(section.header.sh_addr, &self.header.ei_class)?;
+            w.write_class(section.header.sh_offset, &self.header.ei_class)?;
+            w.write_class(section.header.sh_size, &self.header.ei_class)?;
+            w.write_u32(section.header.sh_link)?;
+            w.write_u32(section.header.sh_info)?;
+            w.write_class(section.header.sh_addralign, &self.header.ei_class)?;
+            w.write_class(section.header.sh_entsize, &self.header.ei_class)?;
+        }
+
+        return Ok(());
     }
 }

@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 byteordered = "0.6.0"
+indexmap = "2.2.5"

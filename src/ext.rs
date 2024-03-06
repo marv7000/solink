@@ -1,4 +1,4 @@
-use std::io::{Error, Read, Write};
+use std::io::{Error, Read, Seek, Write};
 
 use crate::elf::Class;
 
@@ -46,6 +46,7 @@ impl<T: Read> ReadExt for T {
 }
 
 pub trait WriteExt {
+    fn write_class(&mut self, value: u64, class: &Class) -> std::io::Result<()>;
     fn write_cstr(&mut self, data: &String) -> Result<(), Error>;
 }
 
@@ -54,5 +55,37 @@ impl<T: Write> WriteExt for T {
         self.write(data.as_bytes())?;
         self.write(&[0u8])?;
         Ok(())
+    }
+
+    #[inline]
+    fn write_class(&mut self, value: u64, class: &Class) -> std::io::Result<()> {
+        match class {
+            Class::Class32 => {
+                self.write(&(value as u32).to_ne_bytes())?;
+            }
+            Class::Class64 => {
+                self.write(&(value as u64).to_ne_bytes())?;
+            }
+        }
+        return Ok(());
+    }
+}
+
+pub trait SeekExt {
+    fn align(&mut self, align: u64) -> std::io::Result<()>;
+}
+
+impl<T: Seek> SeekExt for T {
+    fn align(&mut self, align: u64) -> std::io::Result<()> {
+        let cur = self.stream_position()?;
+        if align == 0 {
+            return Ok(());
+        }
+
+        if cur % align != 0 {
+            self.seek(std::io::SeekFrom::Start(cur + (align - cur % align)))?;
+        }
+
+        return Ok(());
     }
 }

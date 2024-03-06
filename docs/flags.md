@@ -16,7 +16,7 @@ symbol failed to match.
 ### `-q` `--quiet`
 Don't write any messages to the standard output.
 
-### `-v` `--version`
+### `-V` `--version`
 Write the version to standard output.
 
 ### `--help`

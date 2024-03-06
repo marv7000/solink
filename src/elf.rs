@@ -25,12 +25,12 @@ pub enum Class {
 
 #[derive(Debug, Clone)]
 pub struct Symbol {
-    name: u32,
-    info: u8,
-    other: u8,
-    shndx: u16,
-    value: u64,
-    size: u64,
+    sym_name: u32,
+    sym_info: u8,
+    sym_other: u8,
+    sym_shndx: u16,
+    sym_value: u64,
+    sym_size: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -116,6 +116,7 @@ pub struct Elf {
     pub sections: IndexMap<String, Section>,
     pub symbols: IndexMap<String, Symbol>,
     pub dynamic_symbols: IndexMap<String, Symbol>,
+    pub string_table: Section,
 }
 
 impl Elf {
@@ -147,6 +148,7 @@ impl Elf {
             sections: IndexMap::new(),
             symbols: IndexMap::new(),
             dynamic_symbols: IndexMap::new(),
+            string_table: Section::new(vec![]),
         };
     }
 
@@ -162,8 +164,17 @@ impl Elf {
         Ok(())
     }
 
-    pub fn link(&mut self, other: &Elf) {
-        todo!();
+    pub fn link(&mut self, other: &Elf, force: bool) {
+        // Get all exported functions from the other ELF.
+        let matched_fns = other
+            .dynamic_symbols
+            .iter()
+            .filter(|(x, y)| self.dynamic_symbols.contains_key(x.as_str()) && y.sym_info == 0x12)
+            .collect::<Vec<_>>();
+
+        // Get all imported functions from
+        dbg!(&matched_fns);
+        // TODO
     }
 
     pub fn update(&mut self) -> Result<(), Box<dyn Error>> {
@@ -187,21 +198,61 @@ impl Elf {
             }
         }
 
+        // Update symbol table.
+        {
+            let mut symtab_data = Vec::new();
+            let mut w = ByteOrdered::runtime(&mut symtab_data, self.header.ei_data);
+            for (_, symbol) in &mut self.symbols {
+                match &self.header.ei_class {
+                    Class::Class32 => {
+                        w.write_u32(symbol.sym_name)?;
+                        w.write_class(symbol.sym_value, &self.header.ei_class)?;
+                        w.write_class(symbol.sym_size, &self.header.ei_class)?;
+                        w.write_u8(symbol.sym_info)?;
+                        w.write_u8(symbol.sym_other)?;
+                        w.write_u16(symbol.sym_shndx)?;
+                    }
+                    Class::Class64 => {
+                        w.write_u32(symbol.sym_name)?;
+                        w.write_u8(symbol.sym_info)?;
+                        w.write_u8(symbol.sym_other)?;
+                        w.write_u16(symbol.sym_shndx)?;
+                        w.write_class(symbol.sym_value, &self.header.ei_class)?;
+                        w.write_class(symbol.sym_size, &self.header.ei_class)?;
+                    }
+                };
+            }
+            self.string_table.header.sh_size = symtab_data.len() as u64;
+            self.string_table.body = symtab_data;
+        }
+
         // Update symbol string table.
-        // TODO
+        {
+            let mut strtab_data = vec![0u8];
+            let mut strtab_pos = 1; // Leave room for null strings.
+            for (name, symbol) in &mut self.symbols {
+                strtab_data.write_cstr(name)?;
+                symbol.sym_name = strtab_pos as u32;
+                strtab_pos += name.len() + 1;
+            }
+            self.string_table.body = strtab_data;
+            self.string_table.header.sh_size = strtab_pos as u64;
+        }
 
         // Update section string table.
-        let mut shstr_data = vec![0u8];
-        let mut shstr_pos = 1;
-        for (name, section) in &mut self.sections {
-            shstr_data.write_cstr(name)?;
-            section.header.sh_name = shstr_pos as u32;
-            shstr_pos += name.len() + 1;
+        {
+            let mut shstr_data = vec![0u8];
+            let mut shstr_pos = 1; // Leave room for null strings.
+            for (name, section) in &mut self.sections {
+                shstr_data.write_cstr(name)?;
+                section.header.sh_name = shstr_pos as u32;
+                shstr_pos += name.len() + 1;
+            }
+            self.header.e_shstrndx = self.sections.get_index_of(".shstrtab").unwrap() as u16;
+            let shstrtab = &mut self.sections[".shstrtab"];
+            shstrtab.body = shstr_data;
+            shstrtab.header.sh_size = shstr_pos as u64;
         }
-        self.header.e_shstrndx = self.sections.get_index_of(".shstrtab").unwrap() as u16;
-        let shstr_tab = &mut self.sections[".shstrtab"];
-        shstr_tab.body = shstr_data;
-        shstr_tab.header.sh_size = shstr_pos as u64;
 
         Ok(())
     }
@@ -323,9 +374,11 @@ impl Elf {
                 string_table.header.sh_offset + sect.header.sh_name as u64,
             ))?;
             let name = r.read_cstr()?;
-            if !name.is_empty() {
-                result.sections.insert(name, sect.clone());
-            }
+            match name.as_str() {
+                ".strtab" => result.string_table = sect.clone(),
+                "" => (), // Don't insert empty keys.
+                _ => _ = result.sections.insert(name, sect.clone()),
+            };
         }
 
         // Read symbol table.
@@ -338,25 +391,31 @@ impl Elf {
 
         let symbol_size = symtab.header.sh_size / symtab.header.sh_entsize;
         for _ in 0..symbol_size {
-            let symbol = Symbol {
-                name: r.read_u32()?,
-                info: r.read_u8()?,
-                other: r.read_u8()?,
-                shndx: r.read_u16()?,
-                value: r.read_class(&result.header.ei_class)?,
-                size: r.read_class(&result.header.ei_class)?,
+            let symbol = match &result.header.ei_class {
+                Class::Class64 => Symbol {
+                    sym_name: r.read_u32()?,
+                    sym_value: r.read_class(&result.header.ei_class)?,
+                    sym_size: r.read_class(&result.header.ei_class)?,
+                    sym_info: r.read_u8()?,
+                    sym_other: r.read_u8()?,
+                    sym_shndx: r.read_u16()?,
+                },
+                Class::Class32 => Symbol {
+                    sym_name: r.read_u32()?,
+                    sym_info: r.read_u8()?,
+                    sym_other: r.read_u8()?,
+                    sym_shndx: r.read_u16()?,
+                    sym_value: r.read_class(&result.header.ei_class)?,
+                    sym_size: r.read_class(&result.header.ei_class)?,
+                },
             };
             symbols.push(symbol);
         }
 
         // Resolve symbol names.
-        let strtab = match result.sections.get(".strtab") {
-            Some(x) => x,
-            None => panic!("Section \".strtab\" not found!"),
-        };
         for symbol in &symbols {
             r.seek(SeekFrom::Start(
-                strtab.header.sh_offset + symbol.name as u64,
+                result.string_table.header.sh_offset + symbol.sym_name as u64,
             ))?;
             let name = r.read_cstr()?;
             if !name.is_empty() {
@@ -376,12 +435,12 @@ impl Elf {
         let dynamic_symbol_size = dynsym.header.sh_size / dynsym.header.sh_entsize;
         for _ in 0..dynamic_symbol_size {
             let symbol = Symbol {
-                name: r.read_u32()?,
-                info: r.read_u8()?,
-                other: r.read_u8()?,
-                shndx: r.read_u16()?,
-                value: r.read_class(&result.header.ei_class)?,
-                size: r.read_class(&result.header.ei_class)?,
+                sym_name: r.read_u32()?,
+                sym_info: r.read_u8()?,
+                sym_other: r.read_u8()?,
+                sym_shndx: r.read_u16()?,
+                sym_value: r.read_class(&result.header.ei_class)?,
+                sym_size: r.read_class(&result.header.ei_class)?,
             };
             dynamic_symbols.push(symbol);
         }
@@ -393,7 +452,7 @@ impl Elf {
         };
         for symbol in &dynamic_symbols {
             r.seek(SeekFrom::Start(
-                dynstr.header.sh_offset + symbol.name as u64,
+                dynstr.header.sh_offset + symbol.sym_name as u64,
             ))?;
             let name = r.read_cstr()?;
             if !name.is_empty() {
@@ -435,6 +494,7 @@ impl Elf {
         w.write_u16(self.header.e_shstrndx)?;
 
         // Write program headers.
+        w.seek(SeekFrom::Start(self.header.e_phoff))?;
         for program in &self.programs {
             w.write_u32(program.p_type)?;
             match &self.header.ei_class {
@@ -459,7 +519,7 @@ impl Elf {
             w.write(&section.body)?;
         }
 
-        // Write section header.
+        // Write section headers.
         w.seek(SeekFrom::Start(self.header.e_shoff))?;
         for (_, section) in &self.sections {
             w.write_u32(section.header.sh_name)?;

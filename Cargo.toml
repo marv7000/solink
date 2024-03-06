@@ -1,8 +1,11 @@
 [package]
 name = "solink"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
+about = "Shared Object Linker"
+long_about = "solink reads ELF binaries and attempts to satisfy external references by reading provided shared objects and patching the binary."
 
 [dependencies]
 byteordered = "0.6.0"
+clap = { version = "4.5.1", features = ["derive"] }
 indexmap = "2.2.5"

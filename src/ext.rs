@@ -89,3 +89,13 @@ impl<T: Seek> SeekExt for T {
         return Ok(());
     }
 }
+
+pub fn align(pos: u64, align: u64) -> u64 {
+    if align == 0 {
+        return pos;
+    }
+    if pos % align == 0 {
+        return pos;
+    }
+    return pos + (align - pos % align);
+}

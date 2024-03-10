@@ -7,7 +7,7 @@ use std::{
     io::{Read, Seek, SeekFrom, Write},
 };
 
-use crate::ext::{ReadExt, SeekExt, WriteExt};
+use crate::ext::{self, ReadExt, SeekExt, WriteExt};
 
 #[derive(Debug, Clone)]
 pub enum MachineType {
@@ -102,6 +102,12 @@ pub struct ProgramHeader {
 }
 
 #[derive(Debug, Clone)]
+pub struct Program {
+    pub header: ProgramHeader,
+    pub sections: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
 pub struct Header {
     pub ei_magic: [u8; 4],
     pub ei_class: Class,
@@ -132,7 +138,6 @@ pub struct Elf {
     pub sections: IndexMap<String, Section>,
     pub symbols: IndexMap<String, Symbol>,
     pub dynamic_symbols: IndexMap<String, Symbol>,
-    pub string_table: Section,
 }
 
 impl Elf {
@@ -164,7 +169,6 @@ impl Elf {
             sections: IndexMap::new(),
             symbols: IndexMap::new(),
             dynamic_symbols: IndexMap::new(),
-            string_table: Section::new(vec![]),
         };
     }
 
@@ -173,43 +177,55 @@ impl Elf {
         self.dynamic_symbols
             .clone()
             .into_iter()
-            .filter(|(x, y)| self.dynamic_symbols.contains_key(x.as_str()) && y.sym_info == 0x12)
-            .collect::<IndexMap<String, Symbol>>()
+            .filter(|(_, y)| y.sym_info == 0x12)
+            .collect()
     }
 
     /// Links an ELF to self.
-    pub fn link(&mut self, other: &Elf) {
+    pub fn link(&mut self, other: &Elf) -> IndexMap<String, Symbol> {
         // Get all exported functions from the other ELF.
-        let matched_fns = other.get_functions();
+        let target_fns = self.get_functions();
 
-        // Get all imported functions from
-        dbg!(&matched_fns);
-        // TODO
+        // Filter out the functions from the other ELF, only keep matching symbols.
+        let matched_fns = other
+            .get_functions()
+            .into_iter()
+            .filter(|(x, _)| target_fns.contains_key(x))
+            .collect::<IndexMap<String, Symbol>>();
+
+        // Add a section for each function.
+        matched_fns.iter().for_each(|(x, _)| {
+            _ = self
+                .sections
+                .insert(format!(".fn_{}", x), Section::new(vec![]))
+        });
+
+        // Total size of the data in bytes.
+        let fn_size = matched_fns.iter().map(|(_, y)| y.sym_size).sum::<u64>();
+
+        // Add a program header for these sections.
+        let program = ProgramHeader {
+            p_type: PhType::Load,
+            p_flags: 5, // ReadExec
+            p_offset: self.header.e_phentsize as u64 * self.header.e_phnum as u64
+                + self.header.e_ehsize as u64,
+            p_vaddr: 0x400000,
+            p_paddr: 0x400000,
+            p_filesz: fn_size,
+            p_memsz: fn_size,
+            p_align: 4096,
+        };
+        self.programs.push(program);
+
+        return matched_fns
+            .iter()
+            .map(|(x, y)| (x.clone(), y.clone()))
+            .collect();
     }
 
     pub fn update(&mut self) -> Result<(), Box<dyn Error>> {
-        // Get base offset (ELF header + program headers).
-        let base = self.header.e_ehsize as u64
-            + (self.header.e_phentsize as u64 * self.header.e_phnum as u64);
-
         // Update program header sizes + offsets.
-        // TODO
-
-        // Update section sizes + offsets.
-        let mut section_pos = base;
-        for (_, section) in &mut self.sections {
-            section.header.sh_offset = section_pos;
-            // Add the size of this section to the current cursor.
-            section_pos += section.body.len() as u64;
-            // Align.
-            if section.header.sh_addralign != 0 && section_pos % section.header.sh_addralign != 0 {
-                section_pos +=
-                    section.header.sh_addralign - section_pos % section.header.sh_addralign;
-            }
-        }
-
-        // Start of the symbol table is after all sections.
-        self.header.e_shoff = section_pos;
+        self.header.e_phnum = self.programs.len() as u16;
 
         // Update symbol table.
         {
@@ -235,8 +251,9 @@ impl Elf {
                     }
                 };
             }
-            self.string_table.header.sh_size = symtab_data.len() as u64;
-            self.string_table.body = symtab_data;
+            let symtab = &mut self.sections[".symtab"];
+            symtab.header.sh_size = symtab_data.len() as u64;
+            symtab.body = symtab_data;
         }
 
         // Update symbol string table.
@@ -248,8 +265,9 @@ impl Elf {
                 symbol.sym_name = strtab_pos as u32;
                 strtab_pos += name.len() + 1;
             }
-            self.string_table.body = strtab_data;
-            self.string_table.header.sh_size = strtab_pos as u64;
+            let strtab = &mut self.sections[".strtab"];
+            strtab.header.sh_size = strtab_data.len() as u64;
+            strtab.body = strtab_data;
         }
 
         // Update section string table.
@@ -267,6 +285,22 @@ impl Elf {
             shstrtab.header.sh_size = shstr_pos as u64;
         }
 
+        // Update section sizes + offsets.
+        self.header.e_shnum = self.sections.len() as u16;
+        let mut section_pos = self.header.e_ehsize as u64
+            + (self.header.e_phentsize as u64 * self.header.e_phnum as u64);
+        for (_, section) in &mut self.sections {
+            // Align.
+            section_pos = ext::align(section_pos, section.header.sh_addralign);
+            section.header.sh_offset = section_pos;
+            // Add the size of this section to the current cursor.
+            section_pos += section.body.len() as u64;
+        }
+
+        // Start of the symbol table is after all sections.
+        section_pos = ext::align(section_pos, 16);
+        self.header.e_shoff = section_pos;
+
         Ok(())
     }
 
@@ -282,7 +316,7 @@ impl Elf {
             result.header.ei_class = match r.read_u8()? {
                 1 => Class::Class32,
                 2 => Class::Class64,
-                _ => todo!(),
+                x => panic!("Unknown class type \"{}\"!", x),
             };
             result.header.ei_data = match r.read_u8()? {
                 1 => Endianness::Little,
@@ -290,11 +324,11 @@ impl Elf {
                     r.set_endianness(Endianness::Big);
                     Endianness::Big
                 }
-                _ => todo!(),
+                x => panic!("Unknown endianness type \"{}\"!", x),
             };
             result.header.ei_version = match r.read_u8()? {
                 1 => 1,
-                _ => todo!(),
+                x => panic!("Unknown ident version \"{}\"!", x),
             };
             result.header.ei_osabi = r.read_u8()?;
             result.header.ei_abiversion = r.read_u8()?;
@@ -306,7 +340,7 @@ impl Elf {
             };
             result.header.e_version = match r.read_u32()? {
                 1 => 1,
-                _ => todo!(),
+                x => panic!("Unknown version \"{}\"!", x),
             };
             result.header.e_entry = r.read_class(&result.header.ei_class)?;
             result.header.e_phoff = r.read_class(&result.header.ei_class)?;
@@ -387,11 +421,7 @@ impl Elf {
                 string_table.header.sh_offset + sect.header.sh_name as u64,
             ))?;
             let name = r.read_cstr()?;
-            match name.as_str() {
-                ".strtab" => result.string_table = sect.clone(),
-                "" => (), // Don't insert empty keys.
-                _ => _ = result.sections.insert(name, sect.clone()),
-            };
+            _ = result.sections.insert(name, sect.clone());
         }
 
         // Read symbol table.
@@ -426,9 +456,10 @@ impl Elf {
         }
 
         // Resolve symbol names.
+        let strtab = &result.sections[".strtab"];
         for symbol in &symbols {
             r.seek(SeekFrom::Start(
-                result.string_table.header.sh_offset + symbol.sym_name as u64,
+                strtab.header.sh_offset + symbol.sym_name as u64,
             ))?;
             let name = r.read_cstr()?;
             if !name.is_empty() {

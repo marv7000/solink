@@ -3,10 +3,7 @@ mod ext;
 
 use crate::elf::Elf;
 use clap::Parser;
-use std::{
-    fs::File,
-    path::{Path, PathBuf},
-};
+use std::fs::File;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about)]

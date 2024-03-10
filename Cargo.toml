@@ -9,3 +9,4 @@ long_about = "solink reads ELF binaries and attempts to satisfy external referen
 byteordered = "0.6.0"
 clap = { version = "4.5.1", features = ["derive"] }
 indexmap = "2.2.5"
+num_enum = { version = "0.7.2", features = ["complex-expressions"] }

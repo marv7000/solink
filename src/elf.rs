@@ -1,5 +1,6 @@
 use byteordered::{ByteOrdered, Endianness};
 use indexmap::IndexMap;
+use num_enum::FromPrimitive;
 use std::{
     error::Error,
     fs::File,
@@ -21,6 +22,21 @@ pub enum MachineType {
 pub enum Class {
     Class32 = 1,
     Class64 = 2,
+}
+
+#[derive(FromPrimitive, Debug, Clone, Default)]
+#[repr(u32)]
+pub enum PhType {
+    Load = 0x1,
+    Dynamic = 0x2,
+    Inerp = 0x3,
+    Note = 0x4,
+    Shlib = 0x5,
+    Phdr = 0x6,
+    Tls = 0x7,
+    Num = 0x8,
+    #[default]
+    Unknown = 0x0,
 }
 
 #[derive(Debug, Clone)]
@@ -75,7 +91,7 @@ impl Section {
 
 #[derive(Debug, Clone)]
 pub struct ProgramHeader {
-    p_type: u32,
+    p_type: PhType,
     p_flags: u32,
     p_offset: u64,
     p_vaddr: u64,
@@ -152,18 +168,6 @@ impl Elf {
         };
     }
 
-    pub fn add_program(&mut self, program: ProgramHeader) -> Result<(), Box<dyn Error>> {
-        self.programs.push(program);
-
-        Ok(())
-    }
-
-    pub fn add_section(&mut self, name: String, section: Section) -> Result<(), Box<dyn Error>> {
-        self.sections.insert(name, section);
-
-        Ok(())
-    }
-
     /// Returns an IndexMap with names and symbol references.
     pub fn get_functions(&self) -> IndexMap<String, Symbol> {
         self.dynamic_symbols
@@ -203,6 +207,9 @@ impl Elf {
                     section.header.sh_addralign - section_pos % section.header.sh_addralign;
             }
         }
+
+        // Start of the symbol table is after all sections.
+        self.header.e_shoff = section_pos;
 
         // Update symbol table.
         {
@@ -269,8 +276,8 @@ impl Elf {
         let mut old_pos = 0;
 
         // Read header.
-        r.seek(SeekFrom::Start(old_pos))?;
         {
+            r.seek(SeekFrom::Start(old_pos))?;
             result.header.ei_magic = r.read_amount::<4>()?;
             result.header.ei_class = match r.read_u8()? {
                 1 => Class::Class32,
@@ -318,7 +325,7 @@ impl Elf {
         for _ in 0..result.header.e_phnum {
             let prog = match result.header.ei_class {
                 Class::Class32 => ProgramHeader {
-                    p_type: r.read_u32()?,
+                    p_type: PhType::from(r.read_u32()?),
                     p_offset: r.read_class(&result.header.ei_class)?,
                     p_vaddr: r.read_class(&result.header.ei_class)?,
                     p_paddr: r.read_class(&result.header.ei_class)?,
@@ -328,7 +335,7 @@ impl Elf {
                     p_align: r.read_class(&result.header.ei_class)?,
                 },
                 Class::Class64 => ProgramHeader {
-                    p_type: r.read_u32()?,
+                    p_type: PhType::from(r.read_u32()?),
                     p_flags: r.read_u32()?,
                     p_offset: r.read_class(&result.header.ei_class)?,
                     p_vaddr: r.read_class(&result.header.ei_class)?,
@@ -456,10 +463,9 @@ impl Elf {
             Some(x) => x,
             None => panic!("Section \".dynstr\" not found!"),
         };
+        let dynstr_off = dynstr.header.sh_offset;
         for symbol in &dynamic_symbols {
-            r.seek(SeekFrom::Start(
-                dynstr.header.sh_offset + symbol.sym_name as u64,
-            ))?;
+            r.seek(SeekFrom::Start(dynstr_off + symbol.sym_name as u64))?;
             let name = r.read_cstr()?;
             if !name.is_empty() {
                 result.dynamic_symbols.insert(name, symbol.clone());
@@ -502,7 +508,7 @@ impl Elf {
         // Write program headers.
         w.seek(SeekFrom::Start(self.header.e_phoff))?;
         for program in &self.programs {
-            w.write_u32(program.p_type)?;
+            w.write_u32(program.p_type.clone() as u32)?;
             match &self.header.ei_class {
                 Class::Class64 => w.write_u32(program.p_flags)?,
                 Class::Class32 => (),

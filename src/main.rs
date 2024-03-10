@@ -1,5 +1,6 @@
 mod elf;
 mod ext;
+mod int;
 
 use crate::elf::Elf;
 use clap::Parser;
@@ -42,7 +43,7 @@ fn main() {
     };
     let mut elf_exe = Elf::read(&mut file_exe).unwrap();
 
-    let mut matched_fns = IndexMap::new();
+    let mut matched_fns: IndexMap<String, elf::Symbol> = IndexMap::new();
     // Open and link each library.
     for lib in args.libraries.iter() {
         // Open the library.

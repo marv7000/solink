@@ -1,6 +1,5 @@
 use byteordered::{ByteOrdered, Endianness};
 use indexmap::IndexMap;
-use num_enum::FromPrimitive;
 use std::{
     error::Error,
     fs::File,
@@ -24,21 +23,6 @@ pub enum Class {
     Class64 = 2,
 }
 
-#[derive(FromPrimitive, Debug, Clone, Default)]
-#[repr(u32)]
-pub enum PhType {
-    Load = 0x1,
-    Dynamic = 0x2,
-    Inerp = 0x3,
-    Note = 0x4,
-    Shlib = 0x5,
-    Phdr = 0x6,
-    Tls = 0x7,
-    Num = 0x8,
-    #[default]
-    Unknown = 0x0,
-}
-
 #[derive(Debug, Clone)]
 pub struct Symbol {
     sym_name: u32,
@@ -47,6 +31,7 @@ pub struct Symbol {
     sym_shndx: u16,
     sym_value: u64,
     sym_size: u64,
+    sym_data: Vec<u8>,
 }
 
 #[derive(Debug, Clone)]
@@ -91,7 +76,7 @@ impl Section {
 
 #[derive(Debug, Clone)]
 pub struct ProgramHeader {
-    p_type: PhType,
+    p_type: u32,
     p_flags: u32,
     p_offset: u64,
     p_vaddr: u64,
@@ -194,10 +179,13 @@ impl Elf {
             .collect::<IndexMap<String, Symbol>>();
 
         // Add a section for each function.
-        matched_fns.iter().for_each(|(x, _)| {
-            _ = self
-                .sections
-                .insert(format!(".fn_{}", x), Section::new(vec![]))
+        matched_fns.iter().for_each(|(x, y)| {
+            _ = self.sections.insert(format!(".fn_{}", x), {
+                let mut sect = Section::new(y.sym_data.clone());
+                sect.header.sh_addralign = 16;
+                sect.header.sh_type = 1;
+                sect
+            })
         });
 
         // Total size of the data in bytes.
@@ -205,10 +193,10 @@ impl Elf {
 
         // Add a program header for these sections.
         let program = ProgramHeader {
-            p_type: PhType::Load,
+            p_type: 1,
             p_flags: 5, // ReadExec
-            p_offset: self.header.e_phentsize as u64 * self.header.e_phnum as u64
-                + self.header.e_ehsize as u64,
+            p_offset: self.header.e_ehsize as u64
+                + self.header.e_phentsize as u64 * self.header.e_phnum as u64,
             p_vaddr: 0x400000,
             p_paddr: 0x400000,
             p_filesz: fn_size,
@@ -225,8 +213,8 @@ impl Elf {
 
     pub fn update(&mut self) -> Result<(), Box<dyn Error>> {
         // Update program header sizes + offsets.
+        let old_phnum = self.header.e_phnum;
         self.header.e_phnum = self.programs.len() as u16;
-
         // Update symbol table.
         {
             let mut symtab_data = Vec::new();
@@ -301,6 +289,20 @@ impl Elf {
         section_pos = ext::align(section_pos, 16);
         self.header.e_shoff = section_pos;
 
+        // Byte size of new program header elements.
+        let new_phsize = self.header.e_phentsize * (self.header.e_phnum - old_phnum);
+
+        self.programs.iter_mut().for_each(|x| match x.p_type {
+            // Update the (first) PHDR element in the program header table.
+            6 => {
+                x.p_filesz = self.header.e_phnum as u64 * self.header.e_phentsize as u64;
+                x.p_memsz = self.header.e_phnum as u64 * self.header.e_phentsize as u64;
+            }
+            // Update the INTERP element in the program header table.
+            3 => x.p_offset += new_phsize as u64,
+            _ => (),
+        });
+
         Ok(())
     }
 
@@ -359,7 +361,7 @@ impl Elf {
         for _ in 0..result.header.e_phnum {
             let prog = match result.header.ei_class {
                 Class::Class32 => ProgramHeader {
-                    p_type: PhType::from(r.read_u32()?),
+                    p_type: r.read_u32()?,
                     p_offset: r.read_class(&result.header.ei_class)?,
                     p_vaddr: r.read_class(&result.header.ei_class)?,
                     p_paddr: r.read_class(&result.header.ei_class)?,
@@ -369,7 +371,7 @@ impl Elf {
                     p_align: r.read_class(&result.header.ei_class)?,
                 },
                 Class::Class64 => ProgramHeader {
-                    p_type: PhType::from(r.read_u32()?),
+                    p_type: r.read_u32()?,
                     p_flags: r.read_u32()?,
                     p_offset: r.read_class(&result.header.ei_class)?,
                     p_vaddr: r.read_class(&result.header.ei_class)?,
@@ -426,15 +428,12 @@ impl Elf {
 
         // Read symbol table.
         let mut symbols = Vec::new();
-        let symtab = match result.sections.get(".symtab") {
-            Some(x) => x,
-            None => panic!("Section \".symtab\" not found!"),
-        };
+        let symtab = &result.sections[".symtab"];
         r.seek(SeekFrom::Start(symtab.header.sh_offset))?;
 
         let symbol_size = symtab.header.sh_size / symtab.header.sh_entsize;
         for _ in 0..symbol_size {
-            let symbol = match &result.header.ei_class {
+            let mut symbol = match &result.header.ei_class {
                 Class::Class64 => Symbol {
                     sym_name: r.read_u32()?,
                     sym_value: r.read_class(&result.header.ei_class)?,
@@ -442,6 +441,7 @@ impl Elf {
                     sym_info: r.read_u8()?,
                     sym_other: r.read_u8()?,
                     sym_shndx: r.read_u16()?,
+                    sym_data: Vec::new(),
                 },
                 Class::Class32 => Symbol {
                     sym_name: r.read_u32()?,
@@ -450,9 +450,19 @@ impl Elf {
                     sym_shndx: r.read_u16()?,
                     sym_value: r.read_class(&result.header.ei_class)?,
                     sym_size: r.read_class(&result.header.ei_class)?,
+                    sym_data: Vec::new(),
                 },
             };
-            symbols.push(symbol);
+            old_pos = r.stream_position()?;
+            if symbol.sym_info == 0x12 {
+                r.seek(SeekFrom::Start(symbol.sym_value))?;
+                let mut buf = vec![0u8; symbol.sym_size as usize];
+                r.read_exact(&mut buf)?;
+                symbol.sym_data = buf.clone();
+
+                symbols.push(symbol);
+            }
+            r.seek(SeekFrom::Start(old_pos))?;
         }
 
         // Resolve symbol names.
@@ -470,10 +480,7 @@ impl Elf {
 
         // Read dynamic symbol table.
         let mut dynamic_symbols = Vec::new();
-        let dynsym = match result.sections.get(".dynsym") {
-            Some(x) => x,
-            None => panic!("Section \".dynsym\" not found!"),
-        };
+        let dynsym = &result.sections[".dynsym"];
         r.seek(SeekFrom::Start(dynsym.header.sh_offset))?;
 
         let dynamic_symbol_size = dynsym.header.sh_size / dynsym.header.sh_entsize;
@@ -485,15 +492,13 @@ impl Elf {
                 sym_shndx: r.read_u16()?,
                 sym_value: r.read_class(&result.header.ei_class)?,
                 sym_size: r.read_class(&result.header.ei_class)?,
+                sym_data: Vec::new(),
             };
             dynamic_symbols.push(symbol);
         }
 
         // Resolve dynamic symbol names.
-        let dynstr = match result.sections.get(".dynstr") {
-            Some(x) => x,
-            None => panic!("Section \".dynstr\" not found!"),
-        };
+        let dynstr = &result.sections[".dynstr"];
         let dynstr_off = dynstr.header.sh_offset;
         for symbol in &dynamic_symbols {
             r.seek(SeekFrom::Start(dynstr_off + symbol.sym_name as u64))?;

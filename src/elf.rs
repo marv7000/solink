@@ -306,7 +306,7 @@ impl Elf {
         Ok(())
     }
 
-    pub fn read(input: &mut File) -> Result<Self, Box<dyn Error>> {
+    pub fn read(input: impl Read + Seek) -> Result<Self, Box<dyn Error>> {
         let mut result = Elf::new();
         let mut r = ByteOrdered::runtime(input, Endianness::Little);
         let mut old_pos = 0;
@@ -514,7 +514,7 @@ impl Elf {
         return Ok(result);
     }
 
-    pub fn write(&mut self, output: &mut File) -> Result<(), Box<dyn Error>> {
+    pub fn write(&mut self, output: impl Write + Seek) -> Result<(), Box<dyn Error>> {
         let mut w = ByteOrdered::runtime(output, Endianness::Little);
         self.update()?;
 

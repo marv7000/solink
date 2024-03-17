@@ -5,39 +5,39 @@ mod int;
 use crate::elf::Elf;
 use clap::Parser;
 use indexmap::IndexMap;
-use std::{fs::File, path::Path, process::exit};
+use std::{ffi::OsStr, fs::File, path::PathBuf, process::exit};
 
 #[derive(Parser, Debug)]
-#[command(version, about, long_about)]
+#[command(version)]
 struct Args {
-    #[arg(short, long, help = "Save the resulting binary at the given location.")]
-    output: Option<String>,
+    /// Save the resulting binary at the given location.
+    #[arg(short, long)]
+    output: Option<PathBuf>,
 
-    #[arg(short, long, help = "Only match the given symbol.")]
+    /// Only match the given symbol.
+    #[arg(short, long)]
     symbols: Vec<String>,
 
-    #[arg(
-        short,
-        long,
-        default_value = "false",
-        help = "Don't write any messages to the standard output."
-    )]
+    /// Don't write any messages to the standard output.
+    #[arg(short, long)]
     quiet: bool,
 
-    executable: String,
-    libraries: Vec<String>,
+    executable: PathBuf,
+    libraries: Vec<PathBuf>,
 }
 
 fn main() {
     let args = Args::parse();
 
-    let path_exe = Path::new(&args.executable);
-
     // Open the target executable.
-    let mut file_exe = match File::open(path_exe) {
+    let mut file_exe = match File::open(&args.executable) {
         Ok(x) => x,
         Err(e) => {
-            println!("Failed to read file \"{}\": {}", &args.executable, e);
+            println!(
+                "Failed to read file \"{}\": {}",
+                args.executable.display(),
+                e
+            );
             exit(1);
         }
     };
@@ -47,11 +47,10 @@ fn main() {
     // Open and link each library.
     for lib in args.libraries.iter() {
         // Open the library.
-        let path_lib = Path::new(&lib);
-        let mut file_lib = match File::open(path_lib) {
+        let mut file_lib = match File::open(lib) {
             Ok(x) => x,
             Err(e) => {
-                println!("Failed to read file \"{}\": {}", &lib, e);
+                println!("Failed to read file \"{}\": {}", lib.display(), e);
                 exit(1);
             }
         };
@@ -65,7 +64,7 @@ fn main() {
     if !args.quiet {
         println!(
             "Linked the following symbols to \"{}\"",
-            path_exe.file_name().unwrap().to_string_lossy()
+            args.executable.file_name().unwrap().to_string_lossy()
         );
         let import_symbols = elf_exe.get_functions();
         import_symbols.iter().for_each(|(x, _)| {
@@ -82,10 +81,19 @@ fn main() {
     }
 
     // Get output name or create one.
-    let output_path = match args.output {
-        Some(x) => x,
-        None => args.executable.clone() + "_patched",
-    };
+    let output_path = args.output.unwrap_or_else(|| {
+        let mut file_stem = args.executable.file_stem().unwrap().to_owned();
+        file_stem.push(OsStr::new("_patched"));
+        let mut new = args.executable.clone();
+        if let Some(ext) = args.executable.extension() {
+            new.set_file_name(file_stem);
+            new.set_extension(ext);
+            new
+        } else {
+            new.set_file_name(file_stem);
+            new
+        }
+    });
 
     // Save to output path.
     let mut output = File::create(output_path).unwrap();

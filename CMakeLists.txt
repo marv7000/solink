@@ -8,8 +8,8 @@ string(TIMESTAMP SOLINK_VER_PATCH "%Y/%m/%d, %H:%M:%S")
 
 add_executable(solink
     src/main.c
-    src/str.c
     src/args.c
+    src/log.c
     src/elf.c
     src/patch.c
 	src/instr.c

@@ -1,12 +1,10 @@
 #pragma once
-#include <stdio.h>
 #include <stdarg.h>
-
 #include <types.h>
 
 #define _ERR "error: "
 #define _WARN "warning: "
-#define _INFO "info: "
+#define _INFO ""
 
 typedef enum
 {

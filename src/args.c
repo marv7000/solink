@@ -40,7 +40,7 @@ void args_parse(i32 argc, str* argv)
         {
             // Check if we have sufficient arguments.
             if (i + 1 >= argc)
-                log_msg(LOG_ERR, "%s is missing an argument!\n", argv[i]);
+                log_msg(LOG_ERR, "%s is missing an argument!", argv[i]);
             ARGS.output = argv[i + 1];
             i++;
         }
@@ -60,12 +60,12 @@ void args_parse(i32 argc, str* argv)
             exit(0);
         }
         else if (argv[i][0] == '-')
-            log_msg(LOG_ERR, "unknown argument \"%s\"\n", argv[i]);
+            log_msg(LOG_ERR, "unknown argument \"%s\"", argv[i]);
         else
         {
             // Check if the file exists.
             if (!args_check_file(argv[i]))
-                log_msg(LOG_ERR, "\"%s\":\n\t%s\n", argv[i], strerror(errno));
+                log_msg(LOG_ERR, "\"%s\": %s", argv[i], strerror(errno));
             ARGS.files[ARGS.num_files] = argv[i];
             ARGS.num_files++;
             if (ARGS.num_files > files_cap)
@@ -76,6 +76,8 @@ void args_parse(i32 argc, str* argv)
         }
     }
 
+    log_msg(LOG_INFO, "%hu", ARGS.num_files);
+    log_msg(LOG_INFO, "%i", log_quiet);
     // We need at least 1 library and 1 executable.
     if (ARGS.num_files < 2)
         log_msg(LOG_ERR, "need at least 2 files to link.");

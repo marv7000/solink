@@ -1,3 +1,4 @@
+#include "elf.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -7,60 +8,48 @@
 #include <args.h>
 #include <log.h>
 
-bool patch_get_dynsym(const elf_obj* elf, u16* dynsym, u16* dynstr)
+size patch_get_symbols(const elf_obj* elf, str** names)
 {
-    if (!elf_find_section(".dynsym", elf, dynsym) || !elf_find_section(".dynstr", elf, dynstr))
-    {
-        log_msg(LOG_ERR, "couldn't find dynamic symbol table!");
-        return false;
-    }
-    return true;
-}
-
-bool patch_get_symbols(const elf_obj* elf, str** names, size* num)
-{
-    if (!elf || !names || !num)
-        return false;
+    if (!names)
+        return log_msg(LOG_ERR, "couldn't get symbols, no name buffer given!");
+    if (!elf)
+        return log_msg(LOG_ERR, "couldn't get symbols, no ELF given!");
 
     // Get the dynamic symbol table.
-    u16 lib_sym, lib_str;
-    if (!patch_get_dynsym(elf, &lib_sym, &lib_str))
-        return false;
-
+    u16 lib_sym = elf_find_section(elf, ".dynsym");
+    u16 lib_str = elf_find_section(elf, ".dynstr");
     size num_sym = elf->sections[lib_sym].header.sh_size / elf->sections[lib_sym].header.sh_entsize;
 
-    // Write all entries to the buffer.
-    str* buf = (str*)calloc(num_sym, sizeof(str));
-    for (size i = 0; i < num_sym; i++)
+    // Allocate a max size of all dynamic symbols.
+    str* buf = calloc(num_sym, sizeof(str));
+    size i = 0, written = 0;
+    // Write all present function symbols to the buffer.
+    while (i < num_sym)
     {
         elf_symtab* sym = ((elf_symtab*)elf->sections[lib_sym].data) + i;
         // Only match symbols with info == STB_GLOBAL | STB_FUNC
         if (sym->sym_info == 0x12)
         {
-            buf[i] = (char*)(elf->sections[lib_str].data + sym->sym_name);
+            buf[written] = (char*)(elf->sections[lib_str].data + sym->sym_name);
+            written++;
         }
-        else
-        {
-            buf[i] = NULL;
-        }
+        i++;
     }
-    *num = num_sym;
     *names = buf;
-    return true;
+    return written;
 }
 
 elf_symtab* patch_find_sym(const elf_obj* elf, str name)
 {
-    if (!elf || !name)
-        return NULL;
+    if (!name)
+        log_msg(LOG_ERR, "couldn't find symbol, no name given!", name);
+    if (!elf)
+        log_msg(LOG_ERR, "couldn't find symbol \"%s\", no ELF given!", name);
 
-    uint16_t lib_sym, lib_str;
-    if (!patch_get_dynsym(elf, &lib_sym, &lib_str))
-        return NULL;
+    u16 lib_sym = elf_find_section(elf, ".dynsym");
 
     str* sym_names;
-    size num_names;
-    patch_get_symbols(elf, &sym_names, &num_names);
+    size num_names = patch_get_symbols(elf, &sym_names);
     for (size i = 0; i < num_names; i++)
     {
         if (!sym_names[i])
@@ -80,16 +69,13 @@ bool patch_match_symbols(const elf_obj* target, const elf_obj* libs, size num_li
 
     // Get all symbol names from the target.
     str* target_sym_names;
-    size target_sym_num_names;
-    if (!patch_get_symbols(target, &target_sym_names, &target_sym_num_names))
-        return false;
+    size target_sym_num_names = patch_get_symbols(target, &target_sym_names);
 
     // Get all symbol names from libraries.
     str** sym_names = calloc(num_lib, sizeof(str*));
     size* sym_num_names = calloc(num_lib, sizeof(size));
     for (size i = 0; i < num_lib; i++)
-        if (!patch_get_symbols(&libs[i], &sym_names[i], &sym_num_names[i]))
-            return false;
+        sym_num_names[i] = patch_get_symbols(&libs[i], &sym_names[i]);
 
     // Allocate memory.
     str* buf = (str*)calloc(sizeof(str), target_sym_num_names);
@@ -122,9 +108,7 @@ bool patch_match_symbols(const elf_obj* target, const elf_obj* libs, size num_li
 bool patch_link_library(elf_obj* target, const elf_obj* library)
 {
     str* names;
-    size num_names;
-    if (!patch_get_symbols(target, &names, &num_names))
-        return false;
+    size num_names = patch_get_symbols(target, &names);
 
     // TODO: Create new section for the library.
     //elf_add_section(library, );
@@ -135,34 +119,37 @@ bool patch_link_library(elf_obj* target, const elf_obj* library)
         bool linked = patch_link_symbol(target, library, names[sym]);
         // Unless the force flag is set.
         if (ARGS.force && !linked)
-            log_msg(LOG_ERR, "failed to link symbol \"%s\"!", names[sym]);
+            return log_msg(LOG_ERR, "failed to link symbol \"%s\"!", names[sym]);
     }
     return true;
 }
 
 bool patch_link_symbol(elf_obj* target, const elf_obj* library, str name)
 {
-    if (!target || !library || !name)
-        return false;
+    if (!name)
+        return log_msg(LOG_ERR, "failed to link a symbol, no name given!");
+    if (!target)
+        return log_msg(LOG_ERR, "failed to link symbol \"%s\", no target given!", name);
+    if (!library)
+        return log_msg(LOG_ERR, "failed to link symbol \"%s\", no library given!", name);
 
     // Get bytes from library function.
     elf_symtab* sym = patch_find_sym(library, name);
     if (!sym)
-        return log_msg(LOG_WARN, "couldn't find symbol \"%s\"", name);
+        return log_msg(LOG_WARN, "couldn't find symbol \"%s\"! (sym = %p)", name, sym);
 
     u8* fn_bytes = malloc(sym->sym_size);
     // Copy the bytes behind the symbol.
-    //TODO: Do symbol offset resolving during elf_read() because symbol offsets are absolute!
+    // TODO: Do symbol offset resolving during elf_read() because symbol offsets are absolute!
     //memcpy(fn_bytes, library->data + sym->sym_value, sym->sym_size);
 
     // Append the bytes to the end of the section.
     target->sections[target->header.e_shnum - 1].data = fn_bytes;
 
-    // Let the symbol know where the data lives now.
+    // TODO: Let the symbol know where the data lives now.
     elf_symtab* target_sym = patch_find_sym(target, name);
-    if (!sym)
+    if (!target_sym)
         return log_msg(LOG_WARN, "couldn't find symbol \"%s\" in the target object.", name);
-
 
     return true;
 }

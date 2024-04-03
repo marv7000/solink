@@ -10,11 +10,10 @@ bool elf_check(const elf_obj* elf)
 {
     // No ELF was provided.
     if (!elf)
-        return log_msg(LOG_ERR, "no object was provided!");
+        return log_msg(LOG_ERR, "no ELF was provided!");
     // Magic has to be exact.
     if (elf->header.e_ident_magic != ELF_MAGIC)
-        return log_msg(LOG_ERR,
-            "invalid magic! expected %#x, but got %#x.", ELF_MAGIC, elf->header.e_ident_magic);
+        return log_msg(LOG_ERR, "invalid magic! expected %#x, but got %#x.", ELF_MAGIC, elf->header.e_ident_magic);
     // Either 32-bit or 64-bit.
     if (elf->header.e_ident_class != 1 && elf->header.e_ident_class != 2)
         return log_msg(LOG_ERR, "invalid ident class! expected 1 or 2, but got \"%i\".", elf->header.e_ident_class);
@@ -27,13 +26,12 @@ bool elf_check(const elf_obj* elf)
 
     switch (elf->header.e_machine)
     {
-        // TODO
-        // Machine has to be x86_64 for now.
+        // TODO: Machine has to be x86_64 for now. Add support for more later.
         case EM_X86_64:
             break;
         // Unsupported architecture.
         default:
-            return log_msg(LOG_ERR, "invalid version! expected 1, but got \"%i\".", elf->header.e_version);
+            return log_msg(LOG_ERR, "unsupported architecture! got \"%i\".", elf->header.e_machine);
     }
 
     return true;
@@ -53,6 +51,8 @@ elf_obj elf_new()
     elf.header.e_type = 3;
     elf.header.e_machine = 0x3e;
     elf.header.e_version = 1;
+
+    elf.file_name = "unnamed";
 
     return elf;
 }
@@ -182,7 +182,7 @@ elf_obj elf_read(const str file)
         fread(elf.sections[i].data, sizeof(u8), elf.sections[i].header.sh_size, f);
     }
 
-    // Calculate segment <-> section mapping
+    // TODO: Calculate segment <-> section mapping
 
     // Clean up.
     fclose(f);
@@ -304,10 +304,12 @@ void elf_write(const str path, const elf_obj* elf)
     fclose(f);
 }
 
-bool elf_find_section(str name, const elf_obj* elf, uint16_t* idx)
+u16 elf_find_section(const elf_obj* elf, const str name)
 {
-    if (!name || !elf || !idx)
-        return false;
+    if (!name)
+        return log_msg(LOG_ERR, "couldn't find a section, no name given!");
+    if (!elf)
+        return log_msg(LOG_ERR, "couldn't find section \"%s\", no ELF given!", name);
 
     // For every section header.
     for (u16 sect = 0; sect < elf->header.e_shnum; sect++)
@@ -315,21 +317,21 @@ bool elf_find_section(str name, const elf_obj* elf, uint16_t* idx)
         // Seek to the string table + name offset.
         str string_off = elf_get_section_name(elf, sect);
         if (!strcmp(string_off, name))
-        {
-            *idx = sect;
-            return true;
-        }
+            return sect;
     }
-
-    return false;
+    return log_msg(LOG_ERR, "couldn't find section \"%s\"!", name);
 }
 
 str elf_get_section_name(const elf_obj* elf, uint16_t idx)
 {
     if (!elf)
-        return NULL;
+        log_msg(LOG_ERR, "failed to get section name, no ELF given!");
     if (idx > elf->header.e_shnum)
-        return NULL;
-    u8* strtab = elf->sections[elf->header.e_shstrndx].data;
-    return (char*)(strtab + elf->sections[idx].header.sh_name);
+        log_msg(LOG_ERR, "failed to get section name, index was out of bounds! (idx = %i, e_shnum = %i)", idx, elf->header.e_shnum);
+
+    // Get the start of the section header string table.
+    u8* shstrtab = elf->sections[elf->header.e_shstrndx].data;
+    char* name = (char*)(shstrtab + elf->sections[idx].header.sh_name);
+    // Add the offset of the name on top.
+    return name;
 }

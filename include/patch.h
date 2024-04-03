@@ -3,19 +3,11 @@
 #include <elf.h>
 #include <types.h>
 
-/// \brief                  Checks an ELF for presence of the dynamic symbol table (aka ".dynsym", ".dynstr").
-/// \param  [in]    elf     The file to check.
-/// \param  [ref]   dynsym  The index to the dynamic symbol table.
-/// \param  [ref]   dynstr  The index to the dynamic symbol string table.
-/// \returns                `true` if present, otherwise `false`.
-bool patch_get_dynsym(const elf_obj* elf, uint16_t* dynsym, uint16_t* dynstr);
-
 /// \brief                  Extracts the symbol names from the dynamic symbol table.
 /// \param  [in]    elf     The file to extract from.
-/// \param  [ref]   names   A reference to an array of all symbol names.
-/// \param  [ref]   num     The size of the name array.
-/// \returns                `true` if symbol table is present, otherwise `false`.
-bool patch_get_symbols(const elf_obj* elf, str** names, size* num);
+/// \param  [out]   names   A reference to an array to store all symbol names in.
+/// \returns        num     The size of the name array.
+size patch_get_symbols(const elf_obj* elf, str** names);
 
 /// \brief                  Gets a pointer to the specified symbol.
 /// \param  [in]    elf     The file to extract from.

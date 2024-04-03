@@ -76,8 +76,6 @@ void args_parse(i32 argc, str* argv)
         }
     }
 
-    log_msg(LOG_INFO, "%hu", ARGS.num_files);
-    log_msg(LOG_INFO, "%i", log_quiet);
     // We need at least 1 library and 1 executable.
     if (ARGS.num_files < 2)
         log_msg(LOG_ERR, "need at least 2 files to link.");

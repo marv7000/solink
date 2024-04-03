@@ -1,7 +1,6 @@
 #pragma once
 #include <stddef.h>
 #include <stdbool.h>
-#include <stdio.h>
 
 #include <types.h>
 
@@ -92,6 +91,7 @@ typedef struct
 
 typedef struct
 {
+    str file_name;
     /// ELF Header
     elf_header header;
     /// Programs/Segments
@@ -123,11 +123,10 @@ elf_obj elf_read(const str file);
 void elf_write(const str file, const elf_obj* elf);
 
 /// \brief                  Finds a section by name and gets its index.
-/// \param  [in]    name    The name of the section.
 /// \param  [in]    elf     The deserialized ELF.
-/// \param  [out]   idx     The index of the section, if function returned `ELF_OK`.
-/// \returns                `true` if successful, otherwise `false`.
-bool elf_find_section(const str name, const elf_obj* elf, uint16_t* idx);
+/// \param  [in]    name    The name of the section.
+/// \returns                The index of the section.
+u16 elf_find_section(const elf_obj* elf, const str name);
 
 /// \brief                  Gets the name of a section at the given index.
 /// \param  [in]    elf     The file where the section is stored.

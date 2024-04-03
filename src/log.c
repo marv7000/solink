@@ -10,14 +10,12 @@ bool log_msg(log_level level, const char* fmt, ...)
     va_start(args, fmt);
 
     FILE* f = stdout;
-    bool should_exit = false;
     const char* log = _ERR;
     switch (level)
     {
         case LOG_INFO: log = _INFO; break;
         case LOG_WARN: log = _WARN; break;
         default:
-            should_exit = true;
             f = stderr;
             break;
     }
@@ -29,7 +27,7 @@ bool log_msg(log_level level, const char* fmt, ...)
     }
     va_end(args);
 
-    if (should_exit)
+    if (level > 0)
         exit(level);
 
     return false;

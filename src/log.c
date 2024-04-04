@@ -23,7 +23,6 @@ bool log_msg(log_level level, const char* fmt, ...)
     {
         fprintf(f, "%s", log);
         vfprintf(f, fmt, args);
-        fprintf(f, "\n");
     }
     va_end(args);
 

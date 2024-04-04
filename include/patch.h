@@ -13,7 +13,7 @@ size patch_get_symbols(const elf_obj* elf, str** names);
 /// \param  [in]    elf     The file to extract from.
 /// \param  [in]    idx     The index of the symbol in the symbol table.
 /// \returns                A reference to a symbol if successful, otherwise `NULL`.
-elf_symtab* patch_get_sym_idx(const elf_obj* elf, uint64_t idx);
+elf_symtab* patch_get_sym_idx(const elf_obj* elf, u64 idx);
 
 /// \brief                  Gets a pointer to the specified symbol.
 /// \param  [in]    elf     The file to extract from.

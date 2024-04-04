@@ -33,7 +33,7 @@ typedef struct
     u64 p_filesz;
     u64 p_memsz;
     u64 p_align;
-} __attribute__((packed)) elf_program_header;
+} elf_program_header;
 
 typedef struct
 {
@@ -47,7 +47,7 @@ typedef struct
     u32 sh_info;
     u64 sh_addralign;
     u64 sh_entsize;
-} __attribute__((packed)) elf_section_header;
+} elf_section_header;
 
 #define ELF_MAGIC 0x464c457f
 
@@ -122,14 +122,16 @@ elf_obj elf_read(const str file);
 /// \param  [in]    elf     The ELF to write.
 void elf_write(const str file, const elf_obj* elf);
 
-/// \brief                  Finds a section by name and gets its index.
+/// \brief                  Finds a section by name.
 /// \param  [in]    elf     The deserialized ELF.
 /// \param  [in]    name    The name of the section.
-/// \returns                The index of the section.
-u16 elf_find_section(const elf_obj* elf, const str name);
+/// \returns                A pointer to the section in memory.
+elf_section* elf_section_get(const elf_obj* elf, const str name);
 
 /// \brief                  Gets the name of a section at the given index.
 /// \param  [in]    elf     The file where the section is stored.
 /// \param  [in]    idx     The index of the section to get the name of.
 /// \returns                The string if successful, otherwise `NULL`.
-str elf_get_section_name(const elf_obj* elf, uint16_t idx);
+str elf_get_section_name(const elf_obj* elf, u16 idx);
+
+size elf_gnu_hash(const str name);

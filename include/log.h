@@ -10,7 +10,7 @@ typedef enum
 {
     LOG_WARN = -1,
     LOG_INFO = 0,
-    LOG_ERR,
+    LOG_ERR = 1,
 } log_level;
 
 extern bool log_quiet;

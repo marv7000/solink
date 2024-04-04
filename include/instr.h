@@ -5,4 +5,4 @@
 #include <elf.h>
 
 /// \brief          Gets the assembly instructions for a relative jump on the given machine and writes them to instr.
-bool instr_get_bytes(elf_machine type, uint32_t offset, uint8_t instr[16]);
+bool instr_get_bytes(elf_machine type, u32 offset, u8 instr[16]);

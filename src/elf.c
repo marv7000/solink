@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <libgen.h>
 
 #include <elf.h>
 #include <instr.h>
@@ -71,46 +72,47 @@ void elf_free(elf_obj* elf)
 elf_obj elf_read(const str file)
 {
     if (!file)
-        log_msg(LOG_ERR, "failed to open file \"%s\"", file);
+        log_msg(LOG_ERR, "failed to open file \"%s\"\n", file);
 
     elf_obj elf = {0};
     bool err = false;
     FILE* f = fopen(file, "r");
+    elf.file_name = file;
 
     // Read header.
-    fread(&elf.header.e_ident_magic, sizeof(uint32_t), 1, f);
-    fread(&elf.header.e_ident_class, sizeof(uint8_t), 1, f);
-    fread(&elf.header.e_ident_data, sizeof(uint8_t), 1, f);
-    fread(&elf.header.e_ident_version, sizeof(uint8_t), 1, f);
-    fread(&elf.header.e_ident_osabi, sizeof(uint8_t), 1, f);
-    fread(&elf.header.e_ident_abiversion, sizeof(uint8_t), 1, f);
+    fread(&elf.header.e_ident_magic, sizeof(u32), 1, f);
+    fread(&elf.header.e_ident_class, sizeof(u8), 1, f);
+    fread(&elf.header.e_ident_data, sizeof(u8), 1, f);
+    fread(&elf.header.e_ident_version, sizeof(u8), 1, f);
+    fread(&elf.header.e_ident_osabi, sizeof(u8), 1, f);
+    fread(&elf.header.e_ident_abiversion, sizeof(u8), 1, f);
 
     fseek(f, 7, SEEK_CUR);
 
-    fread(&elf.header.e_type, sizeof(uint16_t), 1, f);
-    fread(&elf.header.e_machine, sizeof(uint16_t), 1, f);
-    fread(&elf.header.e_version, sizeof(uint32_t), 1, f);
+    fread(&elf.header.e_type, sizeof(u16), 1, f);
+    fread(&elf.header.e_machine, sizeof(u16), 1, f);
+    fread(&elf.header.e_version, sizeof(u32), 1, f);
 
     if (elf.header.e_ident_class == 1)
     {
-        fread(&elf.header.e_entry, sizeof(uint32_t), 1, f);
-        fread(&elf.header.e_phoff, sizeof(uint32_t), 1, f);
-        fread(&elf.header.e_shoff, sizeof(uint32_t), 1, f);
+        fread(&elf.header.e_entry, sizeof(u32), 1, f);
+        fread(&elf.header.e_phoff, sizeof(u32), 1, f);
+        fread(&elf.header.e_shoff, sizeof(u32), 1, f);
     }
     else
     {
-        fread(&elf.header.e_entry, sizeof(uint64_t), 1, f);
-        fread(&elf.header.e_phoff, sizeof(uint64_t), 1, f);
-        fread(&elf.header.e_shoff, sizeof(uint64_t), 1, f);
+        fread(&elf.header.e_entry, sizeof(u64), 1, f);
+        fread(&elf.header.e_phoff, sizeof(u64), 1, f);
+        fread(&elf.header.e_shoff, sizeof(u64), 1, f);
     }
 
-    fread(&elf.header.e_flags, sizeof(uint32_t), 1, f);
-    fread(&elf.header.e_ehsize, sizeof(uint16_t), 1, f);
-    fread(&elf.header.e_phentsize, sizeof(uint16_t), 1, f);
-    fread(&elf.header.e_phnum, sizeof(uint16_t), 1, f);
-    fread(&elf.header.e_shentsize, sizeof(uint16_t), 1, f);
-    fread(&elf.header.e_shnum, sizeof(uint16_t), 1, f);
-    fread(&elf.header.e_shstrndx, sizeof(uint16_t), 1, f);
+    fread(&elf.header.e_flags, sizeof(u32), 1, f);
+    fread(&elf.header.e_ehsize, sizeof(u16), 1, f);
+    fread(&elf.header.e_phentsize, sizeof(u16), 1, f);
+    fread(&elf.header.e_phnum, sizeof(u16), 1, f);
+    fread(&elf.header.e_shentsize, sizeof(u16), 1, f);
+    fread(&elf.header.e_shnum, sizeof(u16), 1, f);
+    fread(&elf.header.e_shstrndx, sizeof(u16), 1, f);
 
     // Check header for validity.
     elf_check(&elf);
@@ -120,26 +122,26 @@ elf_obj elf_read(const str file)
     elf.segments = calloc(elf.header.e_phnum, sizeof(elf_segment));
     for (u16 i = 0; i < elf.header.e_phnum; i++)
     {
-        fread(&elf.segments[i].header.p_type, sizeof(uint32_t), 1, f);
+        fread(&elf.segments[i].header.p_type, sizeof(u32), 1, f);
         if (elf.header.e_ident_class == 1)
         {
-            fread(&elf.segments[i].header.p_offset, sizeof(uint32_t), 1, f);
-            fread(&elf.segments[i].header.p_vaddr, sizeof(uint32_t), 1, f);
-            fread(&elf.segments[i].header.p_paddr, sizeof(uint32_t), 1, f);
-            fread(&elf.segments[i].header.p_filesz, sizeof(uint32_t), 1, f);
-            fread(&elf.segments[i].header.p_memsz, sizeof(uint32_t), 1, f);
-            fread(&elf.segments[i].header.p_flags, sizeof(uint32_t), 1, f);
-            fread(&elf.segments[i].header.p_align, sizeof(uint32_t), 1, f);
+            fread(&elf.segments[i].header.p_offset, sizeof(u32), 1, f);
+            fread(&elf.segments[i].header.p_vaddr, sizeof(u32), 1, f);
+            fread(&elf.segments[i].header.p_paddr, sizeof(u32), 1, f);
+            fread(&elf.segments[i].header.p_filesz, sizeof(u32), 1, f);
+            fread(&elf.segments[i].header.p_memsz, sizeof(u32), 1, f);
+            fread(&elf.segments[i].header.p_flags, sizeof(u32), 1, f);
+            fread(&elf.segments[i].header.p_align, sizeof(u32), 1, f);
         }
         else
         {
-            fread(&elf.segments[i].header.p_flags, sizeof(uint32_t), 1, f);
-            fread(&elf.segments[i].header.p_offset, sizeof(uint64_t), 1, f);
-            fread(&elf.segments[i].header.p_vaddr, sizeof(uint64_t), 1, f);
-            fread(&elf.segments[i].header.p_paddr, sizeof(uint64_t), 1, f);
-            fread(&elf.segments[i].header.p_filesz, sizeof(uint64_t), 1, f);
-            fread(&elf.segments[i].header.p_memsz, sizeof(uint64_t), 1, f);
-            fread(&elf.segments[i].header.p_align, sizeof(uint64_t), 1, f);
+            fread(&elf.segments[i].header.p_flags, sizeof(u32), 1, f);
+            fread(&elf.segments[i].header.p_offset, sizeof(u64), 1, f);
+            fread(&elf.segments[i].header.p_vaddr, sizeof(u64), 1, f);
+            fread(&elf.segments[i].header.p_paddr, sizeof(u64), 1, f);
+            fread(&elf.segments[i].header.p_filesz, sizeof(u64), 1, f);
+            fread(&elf.segments[i].header.p_memsz, sizeof(u64), 1, f);
+            fread(&elf.segments[i].header.p_align, sizeof(u64), 1, f);
         }
     }
 
@@ -148,29 +150,29 @@ elf_obj elf_read(const str file)
     elf.sections = calloc(elf.header.e_shnum, sizeof(elf_section));
     for (u16 i = 0; i < elf.header.e_shnum; i++)
     {
-        fread(&elf.sections[i].header.sh_name, sizeof(uint32_t), 1, f);
-        fread(&elf.sections[i].header.sh_type, sizeof(uint32_t), 1, f);
+        fread(&elf.sections[i].header.sh_name, sizeof(u32), 1, f);
+        fread(&elf.sections[i].header.sh_type, sizeof(u32), 1, f);
         if (elf.header.e_ident_class == 1)
         {
-            fread(&elf.sections[i].header.sh_flags, sizeof(uint32_t), 1, f);
-            fread(&elf.sections[i].header.sh_addr, sizeof(uint32_t), 1, f);
-            fread(&elf.sections[i].header.sh_offset, sizeof(uint32_t), 1, f);
-            fread(&elf.sections[i].header.sh_size, sizeof(uint32_t), 1, f);
-            fread(&elf.sections[i].header.sh_link, sizeof(uint32_t), 1, f);
-            fread(&elf.sections[i].header.sh_info, sizeof(uint32_t), 1, f);
-            fread(&elf.sections[i].header.sh_addralign, sizeof(uint32_t), 1, f);
-            fread(&elf.sections[i].header.sh_entsize, sizeof(uint32_t), 1, f);
+            fread(&elf.sections[i].header.sh_flags, sizeof(u32), 1, f);
+            fread(&elf.sections[i].header.sh_addr, sizeof(u32), 1, f);
+            fread(&elf.sections[i].header.sh_offset, sizeof(u32), 1, f);
+            fread(&elf.sections[i].header.sh_size, sizeof(u32), 1, f);
+            fread(&elf.sections[i].header.sh_link, sizeof(u32), 1, f);
+            fread(&elf.sections[i].header.sh_info, sizeof(u32), 1, f);
+            fread(&elf.sections[i].header.sh_addralign, sizeof(u32), 1, f);
+            fread(&elf.sections[i].header.sh_entsize, sizeof(u32), 1, f);
         }
         else
         {
-            fread(&elf.sections[i].header.sh_flags, sizeof(uint64_t), 1, f);
-            fread(&elf.sections[i].header.sh_addr, sizeof(uint64_t), 1, f);
-            fread(&elf.sections[i].header.sh_offset, sizeof(uint64_t), 1, f);
-            fread(&elf.sections[i].header.sh_size, sizeof(uint64_t), 1, f);
-            fread(&elf.sections[i].header.sh_link, sizeof(uint32_t), 1, f);
-            fread(&elf.sections[i].header.sh_info, sizeof(uint32_t), 1, f);
-            fread(&elf.sections[i].header.sh_addralign, sizeof(uint64_t), 1, f);
-            fread(&elf.sections[i].header.sh_entsize, sizeof(uint64_t), 1, f);
+            fread(&elf.sections[i].header.sh_flags, sizeof(u64), 1, f);
+            fread(&elf.sections[i].header.sh_addr, sizeof(u64), 1, f);
+            fread(&elf.sections[i].header.sh_offset, sizeof(u64), 1, f);
+            fread(&elf.sections[i].header.sh_size, sizeof(u64), 1, f);
+            fread(&elf.sections[i].header.sh_link, sizeof(u32), 1, f);
+            fread(&elf.sections[i].header.sh_info, sizeof(u32), 1, f);
+            fread(&elf.sections[i].header.sh_addralign, sizeof(u64), 1, f);
+            fread(&elf.sections[i].header.sh_entsize, sizeof(u64), 1, f);
         }
     }
 
@@ -184,6 +186,8 @@ elf_obj elf_read(const str file)
 
     // TODO: Calculate segment <-> section mapping
 
+    // TODO: Do internal offset computation
+
     // Clean up.
     fclose(f);
     return elf;
@@ -192,9 +196,9 @@ elf_obj elf_read(const str file)
 void elf_write(const str path, const elf_obj* elf)
 {
     if (!path)
-        log_msg(LOG_ERR, "no path given to write to!");
+        log_msg(LOG_ERR, "no path given to write to!\n");
     if (!elf)
-        log_msg(LOG_ERR, "no object given to write!");
+        log_msg(LOG_ERR, "no object given to write!\n");
 
     elf_check(elf);
 
@@ -202,92 +206,65 @@ void elf_write(const str path, const elf_obj* elf)
     fseek(f, 0, SEEK_SET);
 
     // Write header.
-    fwrite(&elf->header.e_ident_magic, sizeof(uint32_t), 1, f);
-    fwrite(&elf->header.e_ident_class, sizeof(uint8_t), 1, f);
-    fwrite(&elf->header.e_ident_data, sizeof(uint8_t), 1, f);
-    fwrite(&elf->header.e_ident_version, sizeof(uint8_t), 1, f);
-    fwrite(&elf->header.e_ident_osabi, sizeof(uint8_t), 1, f);
-    fwrite(&elf->header.e_ident_abiversion, sizeof(uint8_t), 1, f);
+    fwrite(&elf->header.e_ident_magic, sizeof(u32), 1, f);
+    fwrite(&elf->header.e_ident_class, sizeof(u8), 1, f);
+    fwrite(&elf->header.e_ident_data, sizeof(u8), 1, f);
+    fwrite(&elf->header.e_ident_version, sizeof(u8), 1, f);
+    fwrite(&elf->header.e_ident_osabi, sizeof(u8), 1, f);
+    fwrite(&elf->header.e_ident_abiversion, sizeof(u8), 1, f);
 
     fseek(f, 7, SEEK_CUR);
 
-    fwrite(&elf->header.e_type, sizeof(uint16_t), 1, f);
-    fwrite(&elf->header.e_machine, sizeof(uint16_t), 1, f);
-    fwrite(&elf->header.e_version, sizeof(uint32_t), 1, f);
+    fwrite(&elf->header.e_type, sizeof(u16), 1, f);
+    fwrite(&elf->header.e_machine, sizeof(u16), 1, f);
+    fwrite(&elf->header.e_version, sizeof(u32), 1, f);
 
     if (elf->header.e_ident_class == 1)
     {
-        fwrite(&elf->header.e_entry, sizeof(uint32_t), 1, f);
-        fwrite(&elf->header.e_phoff, sizeof(uint32_t), 1, f);
-        fwrite(&elf->header.e_shoff, sizeof(uint32_t), 1, f);
+        fwrite(&elf->header.e_entry, sizeof(u32), 1, f);
+        fwrite(&elf->header.e_phoff, sizeof(u32), 1, f);
+        fwrite(&elf->header.e_shoff, sizeof(u32), 1, f);
     }
     else
     {
-        fwrite(&elf->header.e_entry, sizeof(uint64_t), 1, f);
-        fwrite(&elf->header.e_phoff, sizeof(uint64_t), 1, f);
-        fwrite(&elf->header.e_shoff, sizeof(uint64_t), 1, f);
+        fwrite(&elf->header.e_entry, sizeof(u64), 1, f);
+        fwrite(&elf->header.e_phoff, sizeof(u64), 1, f);
+        fwrite(&elf->header.e_shoff, sizeof(u64), 1, f);
     }
 
-    fwrite(&elf->header.e_flags, sizeof(uint32_t), 1, f);
-    fwrite(&elf->header.e_ehsize, sizeof(uint16_t), 1, f);
-    fwrite(&elf->header.e_phentsize, sizeof(uint16_t), 1, f);
-    fwrite(&elf->header.e_phnum, sizeof(uint16_t), 1, f);
-    fwrite(&elf->header.e_shentsize, sizeof(uint16_t), 1, f);
+    fwrite(&elf->header.e_flags, sizeof(u32), 1, f);
+    fwrite(&elf->header.e_ehsize, sizeof(u16), 1, f);
+    fwrite(&elf->header.e_phentsize, sizeof(u16), 1, f);
+    fwrite(&elf->header.e_phnum, sizeof(u16), 1, f);
+    fwrite(&elf->header.e_shentsize, sizeof(u16), 1, f);
+    fwrite(&elf->header.e_shnum, sizeof(u16), 1, f);
+    fwrite(&elf->header.e_shstrndx, sizeof(u16), 1, f);
 
     fseeko(f, (off_t)elf->header.e_phoff, SEEK_SET);
 
     fseeko(f, (off_t)elf->header.e_phoff, SEEK_SET);
     for (u16 i = 0; i < elf->header.e_phnum; i++)
     {
-        fwrite(&elf->segments[i].header.p_type, sizeof(uint32_t), 1, f);
+        fwrite(&elf->segments[i].header.p_type, sizeof(u32), 1, f);
         if (elf->header.e_ident_class == 1)
         {
-            fwrite(&elf->segments[i].header.p_offset, sizeof(uint32_t), 1, f);
-            fwrite(&elf->segments[i].header.p_vaddr, sizeof(uint32_t), 1, f);
-            fwrite(&elf->segments[i].header.p_paddr, sizeof(uint32_t), 1, f);
-            fwrite(&elf->segments[i].header.p_filesz, sizeof(uint32_t), 1, f);
-            fwrite(&elf->segments[i].header.p_memsz, sizeof(uint32_t), 1, f);
-            fwrite(&elf->segments[i].header.p_flags, sizeof(uint32_t), 1, f);
-            fwrite(&elf->segments[i].header.p_align, sizeof(uint32_t), 1, f);
+            fwrite(&elf->segments[i].header.p_offset, sizeof(u32), 1, f);
+            fwrite(&elf->segments[i].header.p_vaddr, sizeof(u32), 1, f);
+            fwrite(&elf->segments[i].header.p_paddr, sizeof(u32), 1, f);
+            fwrite(&elf->segments[i].header.p_filesz, sizeof(u32), 1, f);
+            fwrite(&elf->segments[i].header.p_memsz, sizeof(u32), 1, f);
+            fwrite(&elf->segments[i].header.p_flags, sizeof(u32), 1, f);
+            fwrite(&elf->segments[i].header.p_align, sizeof(u32), 1, f);
         }
         else
         {
-            fwrite(&elf->segments[i].header.p_flags, sizeof(uint32_t), 1, f);
-            fwrite(&elf->segments[i].header.p_offset, sizeof(uint64_t), 1, f);
-            fwrite(&elf->segments[i].header.p_vaddr, sizeof(uint64_t), 1, f);
-            fwrite(&elf->segments[i].header.p_paddr, sizeof(uint64_t), 1, f);
-            fwrite(&elf->segments[i].header.p_filesz, sizeof(uint64_t), 1, f);
-            fwrite(&elf->segments[i].header.p_memsz, sizeof(uint64_t), 1, f);
-            fwrite(&elf->segments[i].header.p_align, sizeof(uint64_t), 1, f);
-        }
-    }
-
-    fseek(f, (long)elf->header.e_shoff, SEEK_SET);
-    for (u16 i = 0; i < elf->header.e_shnum; i++)
-    {
-        fwrite(&elf->sections[i].header.sh_name, sizeof(uint32_t), 1, f);
-        fwrite(&elf->sections[i].header.sh_type, sizeof(uint32_t), 1, f);
-        if (elf->header.e_ident_class == 1)
-        {
-            fwrite(&elf->sections[i].header.sh_flags, sizeof(uint32_t), 1, f);
-            fwrite(&elf->sections[i].header.sh_addr, sizeof(uint32_t), 1, f);
-            fwrite(&elf->sections[i].header.sh_offset, sizeof(uint32_t), 1, f);
-            fwrite(&elf->sections[i].header.sh_size, sizeof(uint32_t), 1, f);
-            fwrite(&elf->sections[i].header.sh_link, sizeof(uint32_t), 1, f);
-            fwrite(&elf->sections[i].header.sh_info, sizeof(uint32_t), 1, f);
-            fwrite(&elf->sections[i].header.sh_addralign, sizeof(uint32_t), 1, f);
-            fwrite(&elf->sections[i].header.sh_entsize, sizeof(uint32_t), 1, f);
-        }
-        else
-        {
-            fwrite(&elf->sections[i].header.sh_flags, sizeof(uint64_t), 1, f);
-            fwrite(&elf->sections[i].header.sh_addr, sizeof(uint64_t), 1, f);
-            fwrite(&elf->sections[i].header.sh_offset, sizeof(uint64_t), 1, f);
-            fwrite(&elf->sections[i].header.sh_size, sizeof(uint64_t), 1, f);
-            fwrite(&elf->sections[i].header.sh_link, sizeof(uint32_t), 1, f);
-            fwrite(&elf->sections[i].header.sh_info, sizeof(uint32_t), 1, f);
-            fwrite(&elf->sections[i].header.sh_addralign, sizeof(uint64_t), 1, f);
-            fwrite(&elf->sections[i].header.sh_entsize, sizeof(uint64_t), 1, f);
+            fwrite(&elf->segments[i].header.p_flags, sizeof(u32), 1, f);
+            fwrite(&elf->segments[i].header.p_offset, sizeof(u64), 1, f);
+            fwrite(&elf->segments[i].header.p_vaddr, sizeof(u64), 1, f);
+            fwrite(&elf->segments[i].header.p_paddr, sizeof(u64), 1, f);
+            fwrite(&elf->segments[i].header.p_filesz, sizeof(u64), 1, f);
+            fwrite(&elf->segments[i].header.p_memsz, sizeof(u64), 1, f);
+            fwrite(&elf->segments[i].header.p_align, sizeof(u64), 1, f);
         }
     }
 
@@ -300,38 +277,80 @@ void elf_write(const str path, const elf_obj* elf)
         fwrite(elf->sections[i].data, sizeof(u8), elf->sections[i].header.sh_size, f);
     }
 
+    // Write the section headers.
+    fseek(f, (long)elf->header.e_shoff, SEEK_SET);
+    for (u16 i = 0; i < elf->header.e_shnum; i++)
+    {
+        fwrite(&elf->sections[i].header.sh_name, sizeof(u32), 1, f);
+        fwrite(&elf->sections[i].header.sh_type, sizeof(u32), 1, f);
+        if (elf->header.e_ident_class == 1)
+        {
+            fwrite(&elf->sections[i].header.sh_flags, sizeof(u32), 1, f);
+            fwrite(&elf->sections[i].header.sh_addr, sizeof(u32), 1, f);
+            fwrite(&elf->sections[i].header.sh_offset, sizeof(u32), 1, f);
+            fwrite(&elf->sections[i].header.sh_size, sizeof(u32), 1, f);
+            fwrite(&elf->sections[i].header.sh_link, sizeof(u32), 1, f);
+            fwrite(&elf->sections[i].header.sh_info, sizeof(u32), 1, f);
+            fwrite(&elf->sections[i].header.sh_addralign, sizeof(u32), 1, f);
+            fwrite(&elf->sections[i].header.sh_entsize, sizeof(u32), 1, f);
+        }
+        else
+        {
+            fwrite(&elf->sections[i].header.sh_flags, sizeof(u64), 1, f);
+            fwrite(&elf->sections[i].header.sh_addr, sizeof(u64), 1, f);
+            fwrite(&elf->sections[i].header.sh_offset, sizeof(u64), 1, f);
+            fwrite(&elf->sections[i].header.sh_size, sizeof(u64), 1, f);
+            fwrite(&elf->sections[i].header.sh_link, sizeof(u32), 1, f);
+            fwrite(&elf->sections[i].header.sh_info, sizeof(u32), 1, f);
+            fwrite(&elf->sections[i].header.sh_addralign, sizeof(u64), 1, f);
+            fwrite(&elf->sections[i].header.sh_entsize, sizeof(u64), 1, f);
+        }
+    }
+
     // Clean up.
     fclose(f);
 }
 
-u16 elf_find_section(const elf_obj* elf, const str name)
+elf_section* elf_section_get(const elf_obj* elf, const str name)
 {
     if (!name)
-        return log_msg(LOG_ERR, "couldn't find a section, no name given!");
+        log_msg(LOG_ERR, "couldn't find a section, no name given!\n");
     if (!elf)
-        return log_msg(LOG_ERR, "couldn't find section \"%s\", no ELF given!", name);
+        log_msg(LOG_ERR, "couldn't find section \"%s\", no ELF given!\n", name);
 
     // For every section header.
     for (u16 sect = 0; sect < elf->header.e_shnum; sect++)
     {
         // Seek to the string table + name offset.
-        str string_off = elf_get_section_name(elf, sect);
-        if (!strcmp(string_off, name))
-            return sect;
+        str cur_name = elf_get_section_name(elf, sect);
+        if (!strcmp(cur_name, name))
+            return elf->sections + sect;
     }
-    return log_msg(LOG_ERR, "couldn't find section \"%s\"!", name);
+    log_msg(LOG_ERR, "couldn't find section \"%s\" in \"%s\"!\n", name, basename(elf->file_name));
+    return NULL;
 }
 
-str elf_get_section_name(const elf_obj* elf, uint16_t idx)
+str elf_get_section_name(const elf_obj* elf, u16 idx)
 {
     if (!elf)
-        log_msg(LOG_ERR, "failed to get section name, no ELF given!");
+        log_msg(LOG_ERR, "failed to get section name, no ELF given!\n");
     if (idx > elf->header.e_shnum)
-        log_msg(LOG_ERR, "failed to get section name, index was out of bounds! (idx = %i, e_shnum = %i)", idx, elf->header.e_shnum);
+        log_msg(LOG_ERR, "\"%s\": failed to get section name, index was out of bounds! (idx = %i, e_shnum = %i)\n", basename(elf->file_name), idx, elf->header.e_shnum);
 
     // Get the start of the section header string table.
     u8* shstrtab = elf->sections[elf->header.e_shstrndx].data;
     char* name = (char*)(shstrtab + elf->sections[idx].header.sh_name);
     // Add the offset of the name on top.
     return name;
+}
+
+size elf_gnu_hash(const str name)
+{
+    str cur = name;
+    size result = 5381;
+    u8 ch;
+    while ((ch = *cur++) != '\0') {
+        result = (result << 5) + result + ch;
+    }
+    return result & 0xffffffff;
 }

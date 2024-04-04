@@ -40,7 +40,7 @@ void args_parse(i32 argc, str* argv)
         {
             // Check if we have sufficient arguments.
             if (i + 1 >= argc)
-                log_msg(LOG_ERR, "%s is missing an argument!", argv[i]);
+                log_msg(LOG_ERR, "%s is missing an argument!\n", argv[i]);
             ARGS.output = argv[i + 1];
             i++;
         }
@@ -60,7 +60,7 @@ void args_parse(i32 argc, str* argv)
             exit(0);
         }
         else if (argv[i][0] == '-')
-            log_msg(LOG_ERR, "unknown argument \"%s\"", argv[i]);
+            log_msg(LOG_ERR, "unknown argument \"%s\"\n", argv[i]);
         else
         {
             // Check if the file exists.
@@ -78,7 +78,7 @@ void args_parse(i32 argc, str* argv)
 
     // We need at least 1 library and 1 executable.
     if (ARGS.num_files < 2)
-        log_msg(LOG_ERR, "need at least 2 files to link.");
+        log_msg(LOG_ERR, "need at least 2 files to link.\n");
 
     // If no output file was given, use "a.out" as a default.
     if (!ARGS.output)

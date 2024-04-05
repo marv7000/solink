@@ -11,19 +11,23 @@ bool elf_check(const elf_obj* elf)
 {
     // No ELF was provided.
     if (!elf)
-        return log_msg(LOG_ERR, "no ELF was provided!");
+        return log_msg(LOG_ERR, "no ELF was provided!\n");
     // Magic has to be exact.
     if (elf->header.e_ident_magic != ELF_MAGIC)
-        return log_msg(LOG_ERR, "invalid magic! expected %#x, but got %#x.", ELF_MAGIC, elf->header.e_ident_magic);
+        return log_msg(LOG_ERR, "[%s] invalid magic! expected %#x, but got %#x\n",
+            basename(elf->file_name), ELF_MAGIC, elf->header.e_ident_magic);
     // Either 32-bit or 64-bit.
     if (elf->header.e_ident_class != 1 && elf->header.e_ident_class != 2)
-        return log_msg(LOG_ERR, "invalid ident class! expected 1 or 2, but got \"%i\".", elf->header.e_ident_class);
+        return log_msg(LOG_ERR, "[%s] invalid ident class! expected 1 or 2, but got \"%i\"\n",
+            basename(elf->file_name), elf->header.e_ident_class);
     // Either little endian or big endian.
     if (elf->header.e_ident_data != 1 && elf->header.e_ident_data != 2)
-        return log_msg(LOG_ERR, "invalid ident data! expected 1 or 2, but got \"%i\".", elf->header.e_ident_data);
+        return log_msg(LOG_ERR, "[%s] invalid ident data! expected 1 or 2, but got \"%i\"\n",
+            basename(elf->file_name), elf->header.e_ident_data);
     // Version has to be 1.
     if (elf->header.e_version != 1)
-        return log_msg(LOG_ERR, "invalid version! expected 1, but got \"%i\".", elf->header.e_version);
+        return log_msg(LOG_ERR, "[%s] invalid version! expected 1, but got \"%i\"\n",
+            basename(elf->file_name), elf->header.e_version);
 
     switch (elf->header.e_machine)
     {
@@ -32,13 +36,14 @@ bool elf_check(const elf_obj* elf)
             break;
         // Unsupported architecture.
         default:
-            return log_msg(LOG_ERR, "unsupported architecture! got \"%i\".", elf->header.e_machine);
+            return log_msg(LOG_ERR, "[%s] unsupported architecture! got \"%i\"\n",
+                basename(elf->file_name), elf->header.e_machine);
     }
 
     return true;
 }
 
-elf_obj elf_new()
+elf_obj elf_new(void)
 {
     elf_obj elf = {0};
 
@@ -72,10 +77,9 @@ void elf_free(elf_obj* elf)
 elf_obj elf_read(const str file)
 {
     if (!file)
-        log_msg(LOG_ERR, "failed to open file \"%s\"\n", file);
+        log_msg(LOG_ERR, "failed to read ELF file, no path given!\n");
 
     elf_obj elf = {0};
-    bool err = false;
     FILE* f = fopen(file, "r");
     elf.file_name = file;
 
@@ -326,7 +330,7 @@ elf_section* elf_section_get(const elf_obj* elf, const str name)
         if (!strcmp(cur_name, name))
             return elf->sections + sect;
     }
-    log_msg(LOG_ERR, "couldn't find section \"%s\" in \"%s\"!\n", name, basename(elf->file_name));
+    log_msg(LOG_ERR, "[%s] couldn't find section \"%s\"!\n", basename(elf->file_name), name);
     return NULL;
 }
 
@@ -335,13 +339,12 @@ str elf_get_section_name(const elf_obj* elf, u16 idx)
     if (!elf)
         log_msg(LOG_ERR, "failed to get section name, no ELF given!\n");
     if (idx > elf->header.e_shnum)
-        log_msg(LOG_ERR, "\"%s\": failed to get section name, index was out of bounds! (idx = %i, e_shnum = %i)\n", basename(elf->file_name), idx, elf->header.e_shnum);
+        log_msg(LOG_ERR, "[%s] failed to get section name, index was out of bounds! (idx = %i, e_shnum = %i)\n", basename(elf->file_name), idx, elf->header.e_shnum);
 
     // Get the start of the section header string table.
     u8* shstrtab = elf->sections[elf->header.e_shstrndx].data;
-    char* name = (char*)(shstrtab + elf->sections[idx].header.sh_name);
     // Add the offset of the name on top.
-    return name;
+    return (char*)(shstrtab + elf->sections[idx].header.sh_name);
 }
 
 size elf_gnu_hash(const str name)

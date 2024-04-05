@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-//! This header is Unix only, swap this for a portable function later!
+// FIXME: This header is POSIX only, swap this for a portable function later!
 #include <libgen.h>
 
 #include <args.h>
@@ -20,10 +20,10 @@ i32 main(i32 argc, str* argv)
         libs[i] = elf_read(ARGS.files[i]);
 
     const u16 num_libs = ARGS.num_files - 1;
-    elf_obj* target = &libs[num_libs];
+    elf_obj* target = &libs[num_libs]; // Target is the last given file.
 
-    // Print matching library symbols.
-    log_msg(LOG_INFO, "linking symbols of \"%s\" like this:\n\n", basename(ARGS.files[num_libs]));
+    // Print a table with matching library symbols.
+    log_msg(LOG_INFO, "linking %s...\n", basename(ARGS.files[num_libs]));
 
     // Get all symbol names from the target.
     str* symbols = NULL; // List of symbol names.
@@ -50,10 +50,10 @@ i32 main(i32 argc, str* argv)
     }
 
     // Print table header.
-    log_msg(LOG_INFO, "link\tname");
+    log_msg(LOG_INFO, _BOLD "link\tname");
     for (size i = 0; i < strs_len - 4; i++) // Pad len - "name"
         log_msg(LOG_INFO, " ");
-    log_msg(LOG_INFO, "\tsource\n");
+    log_msg(LOG_INFO, _BOLD "\tsource\n");
 
     for (size sym = 0; sym < num_sym; sym++)
     {
@@ -64,24 +64,19 @@ i32 main(i32 argc, str* argv)
         pad_str[pad_len] = '\0';
 
         if (sym_idx[sym] >= 0)
-            log_msg(LOG_INFO, "[x]\t%s%s\t%s\n", symbols[sym], pad_str, basename(ARGS.files[sym_idx[sym]]));
+            log_msg(LOG_INFO, "[" _GREEN "x" _REGULAR "]\t%s%s\t%s\n", symbols[sym], pad_str, basename(ARGS.files[sym_idx[sym]]));
         else
-            log_msg(LOG_INFO, "[ ]\t%s%s\t-\n", symbols[sym], pad_str);
+            log_msg(LOG_INFO, "[" _RED "-" _REGULAR "]\t" _RED "%s%s\tn/a\n", symbols[sym], pad_str);
     }
 
     // TODO: Finish linking code
-    /*
     // Patch input executable with all libraries.
-    for (u16 i = 0; i < num_libs; i++)
-    {
-        if (!patch_link_library(target, &libs[i]))
-            log_msg(LOG_ERR, "failed to link against \"%s\"!", basename(ARGS.files[i]));
-    }
-    */
+    if (!patch_link_library(target, libs, num_libs))
+        log_msg(LOG_ERR, "failed to link against a library!\n");
 
     // Write the result to file.
     elf_write(ARGS.output, target);
-    log_msg(LOG_INFO, "wrote the patched binary to \"%s\"\n", ARGS.output);
+    log_msg(LOG_INFO, _GREEN "wrote the patched binary to \"%s\"\n", ARGS.output);
 
     free(libs);
     return 0;

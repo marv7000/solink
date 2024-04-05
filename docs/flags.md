@@ -12,6 +12,9 @@ symbol failed to match.
 ### `-q` `--quiet`
 Don't write any messages to the standard output.
 
+### `--relax`
+Don't write any warnings to the standard output.
+
 ### `-v` `--version`
 Write the version to standard output.
 

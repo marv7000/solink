@@ -14,7 +14,7 @@ bool args_check_file(str path)
     FILE* file;
     file = fopen(path, "r");
     if (!file)
-        return false;
+        log_msg(LOG_ERR, "\"%s\": %s\n", path, strerror(errno));
     fclose(file);
     return true;
 }
@@ -48,6 +48,8 @@ void args_parse(i32 argc, str* argv)
             ARGS.force = true;
         else if (!strcmp(argv[i], "-q") || !strcmp(argv[i], "--quiet"))
             log_quiet = true;
+        else if (!strcmp(argv[i], "--relax"))
+            log_warn = false;
         else if (!strcmp(argv[i], "-v") || !strcmp(argv[i], "--version"))
         {
             log_msg(LOG_INFO, SOLINK_ABOUT_TEXT);
@@ -64,8 +66,8 @@ void args_parse(i32 argc, str* argv)
         else
         {
             // Check if the file exists.
-            if (!args_check_file(argv[i]))
-                log_msg(LOG_ERR, "\"%s\": %s", argv[i], strerror(errno));
+            args_check_file(argv[i]);
+
             ARGS.files[ARGS.num_files] = argv[i];
             ARGS.num_files++;
             if (ARGS.num_files > files_cap)

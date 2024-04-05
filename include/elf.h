@@ -101,7 +101,7 @@ typedef struct
 } elf_obj;
 
 /// \brief              Creates and initializes a new ELF.
-elf_obj elf_new();
+elf_obj elf_new(void);
 
 /// \brief              Frees all resources associated with the given ELF.
 /// \param  [in] elf    The file to free.

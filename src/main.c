@@ -34,6 +34,8 @@ i32 main(i32 argc, str* argv)
     // Try to resolve the symbols.
     for (size sym = 0; sym < num_sym; sym++)
     {
+        if (symbols[sym] == NULL)
+            continue;
         // Find which library provides this symbol.
         sym_idx[sym] = -1;
         for (u16 lib = 0; lib < num_libs; lib++)
@@ -57,6 +59,9 @@ i32 main(i32 argc, str* argv)
 
     for (size sym = 0; sym < num_sym; sym++)
     {
+        if (symbols[sym] == NULL)
+            continue;
+
         // Padding string for nice formatting.
         const size pad_len = strs_len - strlen(symbols[sym]);
         char pad_str[256];

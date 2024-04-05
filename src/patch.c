@@ -23,28 +23,25 @@ size patch_get_symbols(const elf_obj* elf, str** names)
 
     // Allocate a max size of all dynamic symbols.
     str* buf = calloc(num_sym, sizeof(str));
-    size i = 0, written = 0;
     // Write all present function symbols to the buffer.
-    while (i < num_sym)
+    for (size i = 0; i < num_sym; i++)
     {
         // Reinterpret the data as an array of symbols.
         elf_symtab* sym = ((elf_symtab*)lib_sym->data) + i;
         // Only match symbols with info == STB_GLOBAL | STB_FUNC
         if (sym->sym_info == 0x12)
-        {
-            buf[written] = (char*)(lib_str->data + sym->sym_name);
-            written++;
-        }
-        i++;
+            buf[i] = (char*)(lib_str->data + sym->sym_name);
+        else
+            buf[i] = NULL;
     }
     *names = buf;
-    return written;
+    return num_sym;
 }
 
 elf_symtab* patch_find_sym(const elf_obj* elf, str name)
 {
     if (!name)
-        log_msg(LOG_ERR, "couldn't find symbol in \"%s\", no name given!\n", basename(elf->file_name), name);
+        log_msg(LOG_ERR, "[%s] couldn't find symbol, no name given!\n", basename(elf->file_name));
     if (!elf)
         log_msg(LOG_ERR, "couldn't find symbol \"%s\", no ELF given!\n", name);
 
@@ -54,7 +51,7 @@ elf_symtab* patch_find_sym(const elf_obj* elf, str name)
     size num_names = patch_get_symbols(elf, &sym_names);
     for (size i = 0; i < num_names; i++)
     {
-        if (!sym_names[i])
+        if (sym_names[i] == NULL)
             continue;
         if (!strcmp(sym_names[i], name))
             return ((elf_symtab*)lib_sym->data) + i;
@@ -72,6 +69,8 @@ bool patch_link_library(elf_obj* target, const elf_obj* library, u16 num_lib)
     i32* provides = calloc(num_names, sizeof(i32));
     for (size sym = 0; sym < num_names; sym++)
     {
+        if (names[sym] == NULL)
+            continue;
         provides[sym] = -1;
         for (u16 lib = 0; lib < num_lib; lib++)
         {
@@ -93,6 +92,8 @@ bool patch_link_library(elf_obj* target, const elf_obj* library, u16 num_lib)
     // FIXME: This could probably be written nicer.
     for (size sym = 0; sym < num_names; sym++)
     {
+        if (names[sym] == NULL)
+            continue;
         // If nothing provides this symbol.
         if (provides[sym] == -1)
         {
@@ -123,8 +124,12 @@ bool patch_link_symbol(elf_obj* target, const elf_obj* library, str name)
 
     // Get bytes from library function.
     elf_symtab* sym = patch_find_sym(library, name);
+    elf_symtab* target_sym = patch_find_sym(target, name);
     if (!sym)
         return log_msg(LOG_WARN, "[%s <- %s] couldn't find symbol \"%s\" in the library\n",
+            basename(target->file_name), basename(library->file_name), name);
+    if (sym->sym_size == 0)
+        return log_msg(LOG_WARN, "[%s <- %s] symbol \"%s\" has no data, skipping...\n",
             basename(target->file_name), basename(library->file_name), name);
 
     u8* fn_bytes = malloc(sym->sym_size);
@@ -136,7 +141,6 @@ bool patch_link_symbol(elf_obj* target, const elf_obj* library, str name)
     //target->sections[target->header.e_shnum - 1].data = fn_bytes;
 
     // TODO: Let the symbol know where the data lives now.
-    elf_symtab* target_sym = patch_find_sym(target, name);
     if (!target_sym)
         // This should never happen, we've already established that the symbol exists.
         // This means memory got corrupted!
@@ -144,6 +148,6 @@ bool patch_link_symbol(elf_obj* target, const elf_obj* library, str name)
             basename(target->file_name), basename(library->file_name), name);
 
     log_msg(LOG_INFO, "[%s <- %s] linked \"%s\" <%p>\n",
-        basename(target->file_name), basename(library->file_name), name, sym->sym_size);
+        basename(target->file_name), basename(library->file_name), name, sym->sym_value);
     return true;
 }

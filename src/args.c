@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <libgen.h>
 
 #include <args.h>
 #include <about.h>
@@ -41,7 +42,7 @@ void args_parse(i32 argc, str* argv)
             // Check if we have sufficient arguments.
             if (i + 1 >= argc)
                 log_msg(LOG_ERR, "%s is missing an argument!\n", argv[i]);
-            ARGS.output = argv[i + 1];
+            ARGS.output = realpath(argv[i + 1], NULL);
             i++;
         }
         else if (!strcmp(argv[i], "-f") || !strcmp(argv[i], "--force"))
@@ -68,7 +69,7 @@ void args_parse(i32 argc, str* argv)
             // Check if the file exists.
             args_check_file(argv[i]);
 
-            ARGS.files[ARGS.num_files] = argv[i];
+            ARGS.files[ARGS.num_files] = realpath(argv[i], NULL);
             ARGS.num_files++;
             if (ARGS.num_files > files_cap)
             {
@@ -84,5 +85,12 @@ void args_parse(i32 argc, str* argv)
 
     // If no output file was given, use "a.out" as a default.
     if (!ARGS.output)
-		ARGS.output = "a.out";
+		ARGS.output = realpath("a.out", NULL);
+
+    // We can't link to ourselves, that won't do anything.
+    for (u16 f = 0; f < ARGS.num_files - 1; f++)
+    {
+        if (!strcmp(ARGS.files[f], ARGS.files[ARGS.num_files - 1]))
+            log_msg(LOG_ERR, "can't use \"%s\" as target and library!\n", basename(ARGS.files[f]));
+    }
 }

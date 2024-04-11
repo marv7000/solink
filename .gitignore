@@ -1,6 +1,5 @@
 # Build directories
 build/
-out/
 
 # CMake files
 CMakeLists.txt.user

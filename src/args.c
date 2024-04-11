@@ -85,7 +85,7 @@ void args_parse(i32 argc, str* argv)
 
     // If no output file was given, use "a.out" as a default.
     if (!ARGS.output)
-		ARGS.output = realpath("a.out", NULL);
+		ARGS.output = "a.out";
 
     // We can't link to ourselves, that won't do anything.
     for (u16 f = 0; f < ARGS.num_files - 1; f++)

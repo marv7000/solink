@@ -97,8 +97,8 @@ bool patch_link_library(elf_obj* target, const elf_obj* library, u16 num_lib)
         // If nothing provides this symbol.
         if (provides[sym] == -1)
         {
-            log_msg(LOG_WARN, "[%s <- %s] nothing provides symbol \"%s\"\n",
-                basename(target->file_name), basename(library->file_name), names[sym]);
+            log_msg(LOG_WARN, "[%s <- ?] nothing provides symbol \"%s\"\n",
+                basename(target->file_name), names[sym]);
             continue;
         }
 

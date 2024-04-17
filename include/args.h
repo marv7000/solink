@@ -3,14 +3,14 @@
 
 typedef struct
 {
-    u16 num_files;
-    str* files;
-    str output;
-    u32 num_symbols;
-    str* symbols;
-    bool force;
-    bool version;
-    bool help;
+	u16 num_files;
+	str* files;
+	str output;
+	u32 num_symbols;
+	str* symbols;
+	bool force;
+	bool version;
+	bool help;
 } arguments;
 
 extern arguments ARGS;

@@ -24,7 +24,10 @@ bool patch_link_library(elf_obj* target, const elf_obj* library, u16 num_lib);
 
 /// \brief                  Links a given symbol from the library to the target.
 /// \param  [in]    target  The ELF to link to.
+/// \param  [in]    sect    The section to write to.
 /// \param  [in]    library The ELF to link against.
 /// \param  [in]    name    The name of the symbol to link.
 /// \returns                `true` if successful, otherwise `false`.
-bool patch_link_symbol(elf_obj* target, const elf_obj* library, str name);
+bool patch_link_symbol(elf_obj* target, elf_section* sect, const elf_obj* library, str name);
+
+void patch_fix_offsets(elf_obj* elf);

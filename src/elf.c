@@ -188,9 +188,8 @@ elf_obj elf_read(const str file)
 		fread(elf.sections[i].data, sizeof(u8), elf.sections[i].header.sh_size, f);
 	}
 
-	// TODO: Calculate segment <-> section mapping
-
-	// TODO: Do internal offset computation
+	// Keep a copy of the old header before we modify it.
+	elf.old_header = elf.header;
 
 	// Clean up.
 	fclose(f);

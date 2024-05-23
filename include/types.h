@@ -16,3 +16,5 @@ typedef uint64_t u64;
 typedef size_t size;
 
 typedef char* str;
+
+#define ALIGN(x, by) (x % by == 0 ? x : x + (by - (x % by)))

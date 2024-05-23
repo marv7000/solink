@@ -214,7 +214,7 @@ void patch_fix_offsets(elf_obj* elf)
 	const elf_section* last = elf->sections + (elf->header.e_shnum - 1);
 	elf->header.e_shoff = last->header.sh_offset + last->header.sh_size;
 	// Align.
-	elf->header.e_shoff += 16 - (elf->header.e_shoff % 16);
+	elf->header.e_shoff = ALIGN(elf->header.e_shoff, 16);
 
 	// Fix special program headers.
 	for (u16 i = 0; i < elf->header.e_phnum; i++)
@@ -224,6 +224,20 @@ void patch_fix_offsets(elf_obj* elf)
 		{
 			elf->segments[i].header.p_offset = elf_section_get(elf, ".interp")->header.sh_offset;
 		}
-	}
 
+		// ELF Header loading segment, usually the third one.
+		if (elf->segments[i].header.p_type == 1 &&
+			elf->segments[i].header.p_flags == 4 &&
+			elf->segments[i].header.p_offset == 0)
+		{
+			if (i != 2)
+				log_msg(LOG_WARN, "possible segment corruption, expected elf->egments[2] to be the ELF header at %p, but index was %hu\n", elf->segments[i].header.p_vaddr, i);
+
+			const u64 hdr_size = (elf->header.e_phnum - elf->old_header.e_phnum) * elf->header.e_phentsize;
+			elf->segments[i].header.p_memsz += hdr_size;
+			elf->segments[i].header.p_filesz += hdr_size;
+			elf->segments[i].header.p_memsz = ALIGN(elf->segments[i].header.p_memsz, elf->segments[i].header.p_align);
+			elf->segments[i].header.p_filesz = ALIGN(elf->segments[i].header.p_filesz, elf->segments[i].header.p_align);
+		}
+	}
 }

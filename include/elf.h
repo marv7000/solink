@@ -77,10 +77,6 @@ typedef struct
 typedef struct
 {
 	elf_program_header header;
-
-	// Section mappings.
-	size num_sections;
-	elf_section_header** sections;
 } elf_segment;
 
 typedef struct
@@ -94,6 +90,7 @@ typedef struct
 	str file_name;
 	/// ELF Header
 	elf_header header;
+	elf_header old_header;
 	/// Programs/Segments
 	elf_segment* segments;
 	/// Sections
